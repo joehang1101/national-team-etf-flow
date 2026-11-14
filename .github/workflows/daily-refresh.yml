@@ -1,6 +1,8 @@
 name: 每日自动刷新国家队ETF报表
 
 on:
+  push:
+    branches: [main]
   schedule:
     # 每日固定刷新时刻(北京时间): 早盘加密 07:45~09:30 每15分钟一趟(覆盖"次日发布"), 下午 16:00, 晚间 23:00 兜底
     # 数据未推进时 refresh.py 会沿用旧时间戳使输出字节不变, 工作流跳过提交(不产生冗余提交); 数据滞后时脚本会等待重试抓取
@@ -19,10 +21,20 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: etf-daily-refresh
+  cancel-in-progress: false
 
 jobs:
   refresh:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -33,21 +45,43 @@ jobs:
           python-version: "3.11"
 
       - name: 安装依赖
-        run: pip install akshare pandas requests
+        run: pip install -r requirements.txt
+
+      - name: 验证计算与交易日逻辑
+        run: python -m unittest discover -s tests -v
 
       - name: 运行刷新脚本(拉份额/净值/K线, 计算净买卖, 生成报表)
+        if: github.event_name != 'push'
         run: python refresh.py
 
-      - name: 将生成报表复制为 index.html 并提交(含份额/ K线缓存回写)
+      - name: 提交生成报表及份额、净值、K线缓存
+        if: github.event_name != 'push'
         run: |
-          cp "国家队ETF每日净买入卖出报表.html" index.html
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add index.html _etf_shares_cache.json
+          git add index.html "国家队ETF每日净买入卖出报表.html" _etf_shares_cache.json _nav_cache.json
           [ -f _kline_cache.json ] && git add _kline_cache.json
           if git diff --cached --quiet; then
             echo "报表无变化, 跳过提交"
           else
-            git commit -m "chore: 每日自动刷新国家队ETF净买卖报表 ($(date +%F\ %T) 北京+8)"
+            git commit -m "chore: 刷新ETF报表 ($(TZ=Asia/Shanghai date '+%F %T') 北京时间)"
             git push
           fi
+
+      - name: 准备仅含网页的发布目录
+        run: |
+          mkdir -p _site
+          cp index.html _site/index.html
+          touch _site/.nojekyll
+
+      - name: 配置 GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: 上传网页
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: 发布网页
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,4 @@
+# Validated with Python 3.14 locally; CI uses Python 3.11.
+akshare==1.18.64
+pandas>=2.2,<4
+requests>=2.32,<3

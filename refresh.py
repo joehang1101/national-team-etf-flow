@@ -1,18 +1,56 @@
 # -*- coding: utf-8 -*-
 """
 国家队(中央汇金)核心宽基ETF 每日净买入/净卖出 自动刷新脚本
-运行方式: python refresh_national_team_etf.py
+运行方式: python refresh.py；离线重建: python refresh.py --offline
 每次运行: 重新拉取沪深两市 ETF 份额与净值, 计算每日净买卖, 生成自包含HTML报表
 净买入/净卖出 = (当日份额 - 前一日份额) × 当日单位净值 (正=净买入, 负=净卖出)
 """
 import akshare as ak
 from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor
-import json, time, os, io, sys, shutil, requests, re
+import json, time, os, sys, shutil, requests, re
+import argparse
+from contextlib import contextmanager
+from calculations import calculate_daily, positive_number
 
 OUT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPORT = os.path.join(OUT_DIR, "国家队ETF每日净买入卖出报表.html")
 SHARES_CACHE = os.path.join(OUT_DIR, "_etf_shares_cache.json")
+NAV_CACHE = os.path.join(OUT_DIR, "_nav_cache.json")
+BEIJING = timezone(timedelta(hours=8))
+
+
+def now_bj():
+    return datetime.now(BEIJING)
+
+
+def read_json(path):
+    if not os.path.exists(path):
+        return {}
+    with open(path, encoding="utf-8-sig") as f:
+        return json.load(f)
+
+
+def write_json(path, value):
+    # Replace only after serialization and flush succeed; keep the old cache on failure.
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(value, f, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
+    os.replace(tmp, path)
+
+
+@contextmanager
+def network_timeout(seconds=20):
+    """Also bound AKShare calls that omit requests' timeout argument."""
+    original = requests.sessions.Session.request
+    def bounded(session, method, url, **kwargs):
+        kwargs.setdefault("timeout", seconds)
+        return original(session, method, url, **kwargs)
+    requests.sessions.Session.request = bounded
+    try:
+        yield
+    finally:
+        requests.sessions.Session.request = original
 
 def gen_cal_days(start_d, end_d):
     """start_d..end_d 之间的工作日(周一~周五), 返回 YYYYMMDD 序列"""
@@ -27,12 +65,12 @@ def incremental_dates(cache, cal_days):
     """增量拉取窗口: 有缓存则只拉最近若干天(含补拉最近12天以便捕获晚发布), 无缓存则全量构建;
     缓存起始晚于5年窗口时, 从5年起点补齐缺失历史(仅需一次, 补足后缓存即含完整5年)."""
     hist = (cache or {}).get("shares", {})
-    today = datetime.now()
+    today = now_bj()
     if not hist:
         return natural_dates(cal_days)
     try:
-        lastc = datetime.strptime(max(hist), "%Y%m%d")
-        firstc = datetime.strptime(min(hist), "%Y%m%d")
+        lastc = datetime.strptime(max(hist), "%Y%m%d").replace(tzinfo=BEIJING)
+        firstc = datetime.strptime(min(hist), "%Y%m%d").replace(tzinfo=BEIJING)
     except Exception:
         lastc = today - timedelta(days=1); firstc = today
     five_years = today - timedelta(days=cal_days)   # 5年窗口起点(约5年前同日期)
@@ -44,7 +82,6 @@ def incremental_dates(cache, cal_days):
         start = refresh
     return gen_cal_days(start, today)
 
-FRESH_RETRY = 2          # 数据滞后时最多重试次数
 FRESH_WAIT = 150         # 每次重试间隔秒数
 
 def load_trade_calendar(cache):
@@ -69,7 +106,8 @@ def load_trade_calendar(cache):
 def expected_latest_cut(trade_days=None):
     """最近一个已结束交易日(YYYYMMDD), 按北京时间; 周末与法定节假日自动回落到上一交易日.
     日期超出日历覆盖范围(如跨年日历尚未更新)时退化为仅按工作日判断, 避免误判."""
-    d = (datetime.now(timezone(timedelta(hours=8))) - timedelta(days=1)).date()
+    current = now_bj()
+    d = current.date() if current.hour >= 16 else (current - timedelta(days=1)).date()
     cal_last = max(trade_days) if trade_days else ""
     for _ in range(400):
         ds = d.strftime("%Y%m%d")
@@ -96,14 +134,13 @@ def sync_day_of(shares, valid):
 
 def last_published_state():
     """读取上一份报表的 (数据日, 更新时间), 用于数据未推进时沿用旧时间戳, 使输出字节不变、工作流跳过提交"""
-    cands = [REPORT]
-    if os.path.exists(os.path.join(os.getcwd(), "index.html")):
-        cands.append(os.path.join(os.getcwd(), "index.html"))
+    cands = [os.path.join(OUT_DIR, "index.html"), REPORT]
     for p in cands:
         if not os.path.exists(p):
             continue
         try:
-            s = open(p, encoding="utf-8-sig").read()
+            with open(p, encoding="utf-8-sig") as f:
+                s = f.read()
         except Exception:
             continue
         day = re.search(r"数据日\s*<b>(\d{8})</b>", s)
@@ -165,9 +202,9 @@ TARGETS = [
 ]
 
 # 2026-10 救市口径新增纳入的标的(原有23只之外的全部), 在明细行内打标
-NEW_TAG = "2026.10救市"
+NEW_TAG = "扩展观察池"
 # 原有23只口径: 2025 年报披露的汇金系持仓宽基ETF, 在明细行内打标
-BASE_TAG = "2025末汇金持仓"
+BASE_TAG = "原始观察池"
 BASE23 = {"510300","510310","510330","159919","510050","510100","510500","512500",
           "159922","512100","159845","560010","159629","159915","159952","159977",
           "588080","588050","159901","510180","510230","515800","560050"}
@@ -220,14 +257,10 @@ def retry(fn, tries=3, gap=2):
     raise RuntimeError(last)
 
 def natural_dates(n):
-    dates, d = [], datetime.now()
-    while len(dates) < n:
-        if d.weekday() < 5:
-            dates.append(d.strftime("%Y%m%d"))
-        d -= timedelta(days=1)
-    return dates
+    today = now_bj()
+    return gen_cal_days(today - timedelta(days=n), today)
 
-KLINE_CACHE = "_kline_cache.json"
+KLINE_CACHE = os.path.join(OUT_DIR, "_kline_cache.json")
 _EM_DOWN = False   # 东财行情接口整体不可达时置真, 后续标的直接走备用源, 避免逐类空转重试
 _TX_DOWN = False   # 腾讯备用源同样整体不可达时置真, 后续直接走K线缓存, 不再逐类重试
 
@@ -240,7 +273,7 @@ def _em_kline(secid, beg, end):
     headers = {"User-Agent": "Mozilla/5.0", "Referer": "https://quote.eastmoney.com/"}
 
     def _get():
-        j = requests.get(url, headers=headers, timeout=45).json()
+        j = requests.get(url, headers=headers, timeout=15).json()
         if not isinstance(j, dict):
             raise ValueError("bad resp type")
         ks = (j or {}).get("data", {}).get("klines")
@@ -248,7 +281,7 @@ def _em_kline(secid, beg, end):
             raise ValueError("empty klines")
         return ks
 
-    return retry(_get, tries=3, gap=4)
+    return retry(_get, tries=2, gap=1)
 
 def fetch_kline(dates, secid="1.000985"):
     """直连东财拉取指数(secid, 默认中证全指000985)日K, 按 dates 对齐返回 [{d,o,h,l,c}|None].
@@ -280,6 +313,8 @@ def fetch_kline(dates, secid="1.000985"):
                 _EM_DOWN = True
                 raise ValueError("东财K线不可达: %s" % (err,))
     if not m:
+        if any(word in str(err) for word in ("ProxyError", "ConnectionError", "Timeout")):
+            _EM_DOWN = True
         raise ValueError("empty klines: %s" % (err,))
     return [({"d": d, "o": m[k][0], "h": m[k][1], "l": m[k][2], "c": m[k][3]}
              if (k := d.replace("-", "")) in m else None) for d in dates]
@@ -306,7 +341,7 @@ def fetch_kline_tx(dates, tx_code="sh000985"):
                "?param=%s,day,%d-01-01,%d-12-31,800,qfq" % (tx_code, y, y))
 
         def _get():
-            j = requests.get(url, headers=headers, timeout=45).json()
+            j = requests.get(url, headers=headers, timeout=15).json()
             if not isinstance(j, dict):
                 raise ValueError("bad resp type")
             d = j.get("data")
@@ -327,7 +362,7 @@ def fetch_kline_tx(dates, tx_code="sh000985"):
             return rows
 
         try:
-            rows = retry(_get, tries=3, gap=6)
+            rows = retry(_get, tries=2, gap=1)
         except Exception as e:
             err = e
             fails += 1
@@ -347,13 +382,15 @@ def fetch_kline_tx(dates, tx_code="sh000985"):
             except Exception:
                 pass
     if not m:
+        if any(word in str(err) for word in ("ProxyError", "ConnectionError", "Timeout")):
+            _TX_DOWN = True
         raise ValueError("empty tx klines: %s" % (err,))
     return [({"d": d, "o": m[k][0], "h": m[k][1], "l": m[k][2], "c": m[k][3]}
              if (k := d.replace("-", "")) in m else None) for d in dates]
 
 def load_kline_cache():
     try:
-        j = json.load(open(KLINE_CACHE, encoding="utf-8-sig"))
+        j = read_json(KLINE_CACHE)
         return j if isinstance(j, dict) else {}
     except Exception:
         return {}
@@ -374,6 +411,31 @@ def merge_kline(dates, arr, cmap):
         else:
             out.append(None)
     return out, hit
+
+
+def market_kline(dates, cmap, secid, tx_code, offline=False):
+    """Refresh the recent tail; retained history need not be re-fetched every day."""
+    arr = [None] * len(dates)
+    if not offline:
+        cutoff = (now_bj() - timedelta(days=12)).strftime("%Y%m%d") if cmap else ""
+        recent = [d for d in dates if d.replace("-", "") >= cutoff]
+        if recent:
+            try:
+                fetched = fetch_kline(recent, secid)
+            except Exception as e:
+                print("  东财K线失败，尝试腾讯:", str(e)[:80], flush=True)
+                fetched = [None] * len(recent)
+            if any(v is None for v in fetched):
+                try:
+                    backup = fetch_kline_tx(recent, tx_code)
+                    fetched = [a or b for a, b in zip(fetched, backup)]
+                except Exception as e:
+                    print("  腾讯K线失败，保留缓存:", str(e)[:80], flush=True)
+            by_day = dict(zip(recent, fetched))
+            arr = [by_day.get(d) for d in dates]
+    result, hits = merge_kline(dates, arr, cmap)
+    print("  K线 %s: %d/%d 日，缓存补齐 %d 日" % (secid, sum(bool(x) for x in result), len(dates), hits), flush=True)
+    return result
 
 def save_kline_cache(cache, keep_dates):
     """只保留当前窗口内的 K 线, 防止缓存文件逐年膨胀."""
@@ -407,7 +469,11 @@ def load_shares(dates):
                 continue
             for _, row in df.iterrows():
                 try:
-                    daily_shares[ds][str(row.get("基金代码")).zfill(6)] = float(row.get("基金份额"))
+                    code = str(row.get("基金代码")).zfill(6)
+                    value = positive_number(row.get("基金份额"), allow_zero=True)
+                    row_day = str(row.get("统计日期"))[:10].replace("-", "")
+                    if code in sh_codes and value is not None and row_day == ds:
+                        daily_shares[ds][code] = value
                 except Exception:
                     pass
             valid.append(ds)
@@ -429,10 +495,10 @@ def load_shares(dates):
             for _, row in sdf.iterrows():
                 dd = str(row.get("日期"))[:10].replace("-", "")
                 try:
-                    code = str(row.get("基金代码")).zfill(6); v = float(row.get("基金份额"))
+                    code = str(row.get("基金代码")).zfill(6); v = positive_number(row.get("基金份额"), allow_zero=True)
                 except Exception:
                     continue
-                if code in sz_codes:
+                if code in sz_codes and v is not None and s <= dd <= e:
                     daily_shares.setdefault(dd, {})[code] = v
         sz_have = sorted(d for d, m in daily_shares.items() if any(c in m for c in sz_codes))
         if sz_have:
@@ -457,21 +523,44 @@ def fetch_em_share(code):
 
     return retry(_get, tries=3, gap=2)
 
+def parse_nav_text(text):
+    """Extract the JSON series without executing the provider's JavaScript."""
+    match = re.search(r"\bData_netWorthTrend\s*=\s*", text)
+    if not match:
+        raise ValueError("净值响应缺少 Data_netWorthTrend")
+    rows, _ = json.JSONDecoder().raw_decode(text[match.end():].lstrip())
+    if not isinstance(rows, list):
+        raise ValueError("净值序列格式变化")
+    values = {}
+    for row in rows:
+        value = positive_number(row.get("y"))
+        if value is not None:
+            day = datetime.fromtimestamp(float(row["x"]) / 1000, BEIJING).strftime("%Y%m%d")
+            values[day] = value
+    return values
+
+
 def load_nav():
-    nav = {}
-    for code, _, _ in TARGETS:
+    nav = read_json(NAV_CACHE)
+    def one(code):
         try:
-            info = retry(lambda c=code: ak.fund_open_fund_info_em(symbol=c, indicator="单位净值走势"))
-            m = {}
-            for _, row in info.iterrows():
-                d = str(row.get("净值日期"))[:10].replace("-", "")
-                try:
-                    m[d] = float(row.get("单位净值"))
-                except Exception:
-                    pass
-            nav[code] = m
+            def fetch():
+                response = requests.get("https://fund.eastmoney.com/pingzhongdata/%s.js" % code,
+                                        headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
+                response.raise_for_status()
+                return parse_nav_text(response.text)
+            m = retry(fetch)
+            if not m:
+                raise ValueError("净值响应为空")
+            return code, m
         except Exception as e:
-            print(f"  净值 fail {code}: {str(e)[:70]}", flush=True)
+            print(f"  净值 fail {code}: {str(e)[:70]}，保留历史净值缓存", flush=True)
+            return code, {}
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        for code, values in pool.map(one, [c for c, _, _ in TARGETS]):
+            nav.setdefault(code, {}).update(values)
+            print("  净值 %s: %d 日，最新 %s" % (code, len(nav[code]), max(nav[code], default="无")), flush=True)
+    write_json(NAV_CACHE, nav)
     return nav
 
 SH_BACKFILL_FROM = "20251231"   # 沪市新增标的的历史回补起点(含当日, 保证 2025-12-31 基线与近一年口径可用)
@@ -562,7 +651,7 @@ def backfill_new_codes(cache, trade_days=None):
     cache["hist_done"] = done
     return filled
 
-def main():
+def main(offline=False, fresh_retries=0):
     print("拉取数据中 ...", flush=True)
     cache = {}
     if os.path.exists(SHARES_CACHE):
@@ -575,87 +664,40 @@ def main():
     window = incremental_dates(cache, CAL_DAYS)
     print("本次拉取日期窗口: %s ~ %s (共%d个工作日)" %
           (window[0] if window else "-", window[-1] if window else "-", len(window)), flush=True)
-    trade_days = load_trade_calendar(cache)
-    shares, valid, deep_start = load_shares_cached(window, cache, trade_days)
+    trade_days = set(cache.get("trade_days", {}).get("days", [])) if offline else load_trade_calendar(cache)
+    if trade_days:
+        window = [d for d in window if d in trade_days or d > max(trade_days)]
+    if offline:
+        shares = cache.get("shares", {})
+        valid = sorted(d for d, m in shares.items() if m and (not trade_days or d in trade_days))
+        deep_start = cache.get("deep_start")
+    else:
+        shares, valid, deep_start = load_shares_cached(window, cache, trade_days)
     # 新增纳入标的(如 2026.10救市口径)无历史缓存: 一次性回补其历史份额, 保证近一月/近一年与 2025-12-31 基线可用
-    if backfill_new_codes(cache, trade_days):
+    if not offline and backfill_new_codes(cache, trade_days):
         shares = cache.get("shares", {})
         valid = sorted(d for d, m in shares.items() if m)
     # 数据新鲜度自检: 若展示日落后于最近已结束交易日(通常因数据源晚发布/单边失败), 等待后重试抓取
     exp = expected_latest_cut(trade_days)
-    for _attempt in range(FRESH_RETRY):
+    for _attempt in range(0 if offline else fresh_retries + 1):
         cur = sync_day_of(shares, valid)
         stale = cur is not None and int(cur) < exp
         print("数据新鲜度: 最新同步日=%s 期望=%s %s" %
               (cur, exp, "正常" if not stale else "滞后, 稍后重试"), flush=True)
-        if not stale or not window:
+        if not stale or not window or _attempt >= fresh_retries:
             break
         time.sleep(FRESH_WAIT)
         shares, valid, deep_start = load_shares_cached(window, cache, trade_days)
-    # 沪市最新交易日兜底: 云端/个别环境访问上交所受限(fund_etf_scale_sse 常失败), 若最近已结束交易日缺沪份额,
-    # 用东财实时总份额(f84)补入, 保证沪深同步日能推进到最近交易日; 历史缺口待上交所接口恢复后由增量拉取回补。
-    # 仅当 exp 确为交易日时才兜底, 避免节假日(如国庆/中秋)被误填成"幽灵交易日"在K线图上留空。
-    _sh_live = [c for c, _, _m in TARGETS if _m == "sh"]
-    _exp_s = str(exp)
-    _exp_is_trade = (not trade_days) or (_exp_s in trade_days)
-    if _sh_live and _exp_is_trade and not any(shares.get(_exp_s, {}).get(c) for c in _sh_live):
-        _filled = 0; _stale = 0
-        # 找沪市最近一个有官方份额的日期, 用于识别东财快照是否只是"昨日值"(陈旧快照)
-        _prev_sh = {}
-        for _d in reversed(valid):
-            if _d >= _exp_s:
-                continue
-            _m = shares.get(_d, {})
-            if any(c in _m for c in _sh_live):
-                _prev_sh = _m
-                break
-        for _c in _sh_live:
-            try:
-                _p = fetch_em_share(_c)
-            except Exception:
-                _p = None
-            if not _p:
-                continue
-            _q = _prev_sh.get(_c)
-            if _q and abs(_p - _q) <= max(1.0, _q * 1e-9):
-                _stale += 1   # 与上一交易日份额相同 => 快照未滚动, 注入会伪造沪深同步日, 跳过
-                continue
-            shares.setdefault(_exp_s, {})[_c] = _p
-            _filled += 1
-        if _filled:
-            valid = sorted(set(valid) | {_exp_s})
-            print(f"沪市东财快照兜底: 补入 {_exp_s} 沪市 {_filled} 只份额(陈旧跳过 {_stale})", flush=True)
-        elif _stale:
-            print(f"沪市东财快照仍为上一交易日值(跳过{_stale}只), {_exp_s} 沪市暂缺, 数据日按两市同步日回退", flush=True)
-    with open(SHARES_CACHE, "w", encoding="utf-8") as f:
-        json.dump(cache, f, ensure_ascii=False)
+    # Undated real-time f84 snapshots cannot prove a historical observation date.
+    # Only exchange-dated shares enter the daily cache and calculation.
+    if not offline:
+        write_json(SHARES_CACHE, cache)
     if not valid:
-        print("未取到任何交易日份额数据"); return 1
-    nav = load_nav()
-
-    daily = []
-    for code, name, mkt in TARGETS:
-        prev = None; lnav = None; prev_nav = None
-        for ds in valid:
-            v = shares.get(ds, {}).get(code)
-            if v is None:
-                continue
-            nn = nav.get(code, {}).get(ds)
-            if nn is not None:
-                prev_nav = lnav   # 上一有净值日的净值
-                lnav = nn
-            net = (v - prev) * lnav if (prev is not None and lnav is not None) else None
-            # 份额合并(折算)判定: 份额等比骤变 与 净值反向等比联动(乘积≈1) => 非实际申赎, 净买卖置0
-            if prev is not None and v != prev and net is not None and prev_nav and lnav:
-                rs = v / prev          # 份额变化比(合并折半<1 / 拆分加倍>1)
-                rn = lnav / prev_nav   # 净值反向比(合并后>1 / 拆分后<1)
-                if (abs(rs - 1.0) > 0.30 and (rs - 1.0) * (rn - 1.0) < 0
-                        and 0.6 < rs * rn < 1.6):
-                    net = 0.0
-            daily.append({"d": ds, "c": code, "n": name, "m": mkt, "s": v,
-                          "w": lnav, "f": net})
-            prev = v
-        # 缺失份额时补全当日0? 不处理, 汇总时按实际值
+        raise RuntimeError("未取到任何交易日份额数据，保留上次报表")
+    nav = read_json(NAV_CACHE) if offline else load_nav()
+    if not nav:
+        raise RuntimeError("没有净值缓存；请先联网运行 python refresh.py")
+    daily = calculate_daily(TARGETS, shares, nav, valid, trade_days)
 
     # 建立 日期->每条, 日期->合计
     by_date = {}
@@ -666,7 +708,8 @@ def main():
     date_total = {}
     cat_total = {}   # 类别 → {日期: 该类别下所有ETF当日净买入合计}
     for ds in dates_sorted:
-        s = sum(x["f"] for x in items_by[ds].values() if x["f"] is not None)
+        values = [x["f"] for x in items_by[ds].values() if x["f"] is not None]
+        s = sum(values) if values else None
         date_total[ds] = s
         per_cat = {}
         for c, it in items_by[ds].items():
@@ -706,7 +749,7 @@ def main():
     w_sum = cum(week_days); m_sum = cum(month_days)
 
     lpub = last_published_state()
-    stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    stamp = now_bj().strftime("%Y-%m-%d %H:%M")
     if lpub and lpub.get("day") == today:
         stamp = lpub.get("updated") or stamp
     # 各类指数K线: 逐类尝试东财secid, 失败退腾讯; 仍缺的用历史K线缓存补齐(保证不出现整段空白)
@@ -714,56 +757,31 @@ def main():
     _kcat = _kcache.setdefault("cat", {})
     cat_kline = {}
     for _cat, (_e_sec, _tx) in CAT_INDEX.items():
-        try:
-            cat_kline[_cat] = fetch_kline(dates_sorted, _e_sec)
-        except Exception as _e:
-            try:
-                cat_kline[_cat] = fetch_kline_tx(dates_sorted, _tx)
-            except Exception as _e2:
-                print(f"指数K线失败 {_cat}: {_e2}", flush=True)
-                cat_kline[_cat] = [None] * len(dates_sorted)
-        cat_kline[_cat], _hit = merge_kline(dates_sorted, cat_kline[_cat],
-                                            _kcat.setdefault(_cat, {}))
-        if _hit:
-            print(f"  {_cat} K线缓存补齐 {_hit} 日", flush=True)
+        cat_kline[_cat] = market_kline(dates_sorted, _kcat.setdefault(_cat, {}), _e_sec, _tx, offline)
     payload = {
         "updated": stamp,
         "data_asof": today,
         "deep_start": deep_start,
         "dates": [f"{d[:4]}-{d[4:6]}-{d[6:]}" for d in dates_sorted],
-        "date_total": {k: round(v / 1e8, 3) for k, v in date_total.items()},
+        "date_total": {k: round(v / 1e8, 3) if v is not None else None for k, v in date_total.items()},
         "cat_total": {str(k): {cc: round(vv / 1e8, 3) for cc, vv in v.items()} for k, v in cat_total.items()},
         "cat_kline": cat_kline,
         "etfs": [],
     }
-    try:
-        payload["kline"] = fetch_kline(dates_sorted)
-        print("中证全指K线已更新", flush=True)
-    except Exception as e:
-        print("东财K线失败, 尝试腾讯源:", e)
-        try:
-            payload["kline"] = fetch_kline_tx(dates_sorted)
-            print("腾讯K线已更新", flush=True)
-        except Exception as e2:
-            print("K线拉取失败(报表其余部分不受影响):", e2)
-            payload["kline"] = [None] * len(dates_sorted)
-    payload["kline"], _hit = merge_kline(dates_sorted, payload["kline"],
-                                        _kcache.setdefault("kline", {}))
+    payload["kline"] = market_kline(dates_sorted, _kcache.setdefault("kline", {}), "1.000985", "sh000985", offline)
     _ok = sum(1 for x in payload["kline"] if x)
-    print("中证全指K线: 有效 %d/%d 日%s" % (_ok, len(dates_sorted),
-          (", 缓存补齐%d日" % _hit) if _hit else ""), flush=True)
-    save_kline_cache(_kcache, dates_sorted)
+    print("中证全指K线: 有效 %d/%d 日" % (_ok, len(dates_sorted)), flush=True)
+    if not offline:
+        save_kline_cache(_kcache, dates_sorted)
     dsh_all, s5, n5 = {}, {}, {}
     for code, _, _ in TARGETS:
         # 2025-12-31 份额/净值 基准备锚，用于"每日倍量"：单只按份额、同类/全表按金额
-        _prev = None; _dd = {}
+        _dd = {}
         for _ds in dates_sorted:
             _it = items_by.get(_ds, {}).get(code)
-            if _it:
+            if _it and _it["delta"] is not None:
                 _k = f"{_ds[:4]}-{_ds[4:6]}-{_ds[6:]}"
-                if _prev is not None:
-                    _dd[_k] = round((_it["s"] - _prev) / 1e8, 4)
-                _prev = _it["s"]
+                _dd[_k] = round(_it["delta"] / 1e8, 4)
         dsh_all[code] = _dd
         s5[code] = (shares.get("20251231", {}).get(code) or 0) / 1e8
         _nn = None
@@ -776,7 +794,7 @@ def main():
         payload["etfs"].append({
             "c": code, "n": name, "m": "沪" if mkt == "sh" else "深",
             "cat": CAT_MAP.get(code, "其他"),
-            "today": (items_by.get(today, {}).get(code, {}).get("f") or 0) / 1e8,
+            "today": (lambda v: v / 1e8 if v is not None else None)(items_by.get(today, {}).get(code, {}).get("f")),
             "week": round(w_sum.get(code, 0) / 1e8, 3),
             "month": round(m_sum.get(code, 0) / 1e8, 3),
             "last_share": (lambda c=code: (items_by.get(today, {}).get(c, {}).get("s") or 0) / 1e8)(),
@@ -784,10 +802,10 @@ def main():
             "s2025": s5.get(code, 0),
             "n2025": n5.get(code, 0),
             "dsh": dsh_all.get(code, {}),
-            "series": {f"{ds[:4]}-{ds[4:6]}-{ds[6:]}": round((items_by.get(ds, {}).get(code, {}).get("f") or 0) / 1e8, 3)
+            "series": {f"{ds[:4]}-{ds[4:6]}-{ds[6:]}": (lambda v: round(v / 1e8, 3) if v is not None else None)(items_by.get(ds, {}).get(code, {}).get("f"))
                        for ds in dates_sorted},
         })
-    # 每日总持仓市值(全市场口径, 亿元): 每只 份额×净值, 缺日用前一交易日前值填充
+    # 每日总ETF总市值(全市场口径, 亿元): 每只 份额×净值, 缺日用前一交易日前值填充
     per_day = {}
     for it in daily:
         per_day.setdefault(it["c"], {})[it["d"]] = (it["s"], it["w"])
@@ -798,12 +816,27 @@ def main():
         for c, _, _ in TARGETS:
             pd = per_day.get(c, {})
             if ds in pd:
-                last_seen[c] = pd[ds]
+                s, w = pd[ds]
+                old = last_seen.get(c, (None, None))
+                last_seen[c] = (s, w if w is not None else old[1])
             s, w = last_seen.get(c, (None, None))
             if s is not None and w is not None:
                 tot += s * w
         mv_total[ds] = round(tot / 1e8, 1)
     payload["mv_total"] = mv_total
+    coverage = {ds: sum(it["f"] is not None for it in items_by[ds].values()) for ds in dates_sorted}
+    payload["quality"] = {
+        "expected_date": str(exp), "is_stale": today < str(exp),
+        "offline": offline, "target_count": len(TARGETS),
+        "latest_complete": coverage.get(today, 0), "daily_coverage": coverage,
+        "missing_latest": [c for c, _, _ in TARGETS if items_by.get(today, {}).get(c, {}).get("f") is None],
+        "kline_coverage": _ok,
+        "calendar_verified": bool(trade_days and max(trade_days) >= str(exp)),
+        "issues_latest": {c: items_by.get(today, {}).get(c, {}).get("status", "missing_share")
+                          for c, _, _ in TARGETS if items_by.get(today, {}).get(c, {}).get("status") != "ok"},
+    }
+    if not any(coverage.values()):
+        raise RuntimeError("没有可计算的净申赎数据，保留上次报表")
     return payload
 
 def escape_html(s):
@@ -816,7 +849,7 @@ def render_html(p):
         s = f"{v:+,.2f}" if sign else f"{v:,.2f}"
         return s
     def cls(v):
-        return "pos" if v >= 0 else "neg"
+        return "" if v is None else ("pos" if v >= 0 else "neg")
     def ftag(code):
         if code in NEW_TAG_CODES:
             return f'<span class="tag">{NEW_TAG}</span>'
@@ -832,8 +865,8 @@ def render_html(p):
         dt[kk] = v
     # 近21交易日用于柱状图
     chart = dates[-21:]
-    chart_total = [dt.get(d, 0) for d in chart]
-    maxabs = max([abs(x) for x in chart_total] + [1])
+    chart_total = [dt.get(d) for d in chart]
+    maxabs = max([abs(x) for x in chart_total if x is not None] + [1])
     # 近一年滚动累计 (曲线), 起点对齐到深市有数据的日期
     deep_start = p.get("deep_start")
     if deep_start and len(str(deep_start)) == 8:
@@ -855,14 +888,19 @@ def render_html(p):
     month_days = dates[-21:]
     halfyear_days = dates[-120:]
     oneyear_days = dates[-242:]
-    cur_year = str(datetime.now().year)
+    cur_year = str(now_bj().year)
     ytd_days = [d for d in dates if str(d)[:4] == cur_year]
-    week_tot = sum(dt.get(d, 0) for d in week_days)
-    month_tot = sum(dt.get(d, 0) for d in month_days)
-    halfyear_tot = sum(dt.get(d, 0) for d in halfyear_days)
-    oneyear_tot = sum(dt.get(d, 0) for d in oneyear_days)
-    ytd_tot = sum(dt.get(d, 0) for d in ytd_days)
-    today_tot = dt.get(dates[-1], 0)
+    def covered_sum(days):
+        values = [dt[d] for d in days if dt.get(d) is not None]
+        return sum(values) if values else None
+    week_tot = covered_sum(week_days)
+    month_tot = covered_sum(month_days)
+    halfyear_tot = covered_sum(halfyear_days)
+    oneyear_tot = covered_sum(oneyear_days)
+    ytd_tot = covered_sum(ytd_days)
+    today_tot = dt.get(dates[-1])
+    def flow_label(value):
+        return "数据缺失" if value is None else ("净申购" if value >= 0 else "净赎回")
 
     # --- 各类指数K线联动数据 (下拉切换) ---
     _dates_fmt = dates
@@ -880,11 +918,11 @@ def render_html(p):
         _tot_dt[_tkk] = _tv
     # 每类: 该类当日ETF净买入合计(k键=YYYY-MM-DD, 含缺失天填0); 中证全指在首项
     def _cat_series(cat):
-        return [round((_cat_dt.get(d, {}) or {}).get(cat, 0), 3) for d in _dates_fmt]
+        return [(_cat_dt.get(d, {}) or {}).get(cat) for d in _dates_fmt]
     i_kl_names = ["中证全指"] + list(CAT_INDEX.keys())
     _zzkl = p.get("kline") or [None] * len(dates)
     i_kl_series = [_zzkl] + [p.get("cat_kline", {}).get(cat) or [None] * len(dates) for cat in i_kl_names[1:]]
-    _tot_series = [round(_tot_dt.get(d, 0), 3) for d in _dates_fmt]
+    _tot_series = [_tot_dt.get(d) for d in _dates_fmt]
     i_qd_series = [_tot_series] + [_cat_series(cat) for cat in i_kl_names[1:]]
     INAMES = json.dumps(i_kl_names, ensure_ascii=False)
     ISERIES = json.dumps(i_kl_series, ensure_ascii=False)
@@ -925,7 +963,7 @@ def render_html(p):
       "     if(k.o!=null){s1=' &nbsp;开'+k.o+' 高'+k.h+' 低'+k.l+' 收'+k.c;}\n"
       "     var col=q>=0?'#f0705c':'#46c7a6';\n"
       "     var lab=(ci2===0)?'当日净买卖':'该类ETF净买卖';\n"
-      "     return '<b>'+d+'</b>'+s1+' &nbsp;'+lab+' <b style=\"color:'+col+'\">'+(q>=0?'+':'')+q.toFixed(2)+' 亿</b>';}}\n"
+      "     return '<b>'+d+'</b>'+s1+' &nbsp;'+lab+' <b style=\"color:'+col+'\">'+(q==null?'—':(q>=0?'+':'')+q.toFixed(2)+' 亿')+'</b>';}}\n"
       "  };\n"
       " }\n"
       " chart.setOption(opt(cur,ci));\n"
@@ -946,12 +984,13 @@ def render_html(p):
     _cat_opts = "".join('<option%s>%s</option>' % (' selected' if i == 0 else '', _n) for i, _n in enumerate(i_kl_names))
 
     # 内联 ECharts，避免境外 CDN 在本机加载失败导致图表空白
-    _EC_PATH = r"C:\Users\wxk11\.trae-cn\memory\echarts.min.js"
+    _EC_PATH = os.path.join(OUT_DIR, "assets", "echarts.min.js")
     if os.path.exists(_EC_PATH) and os.path.getsize(_EC_PATH) > 100000:
-        _ec = io.open(_EC_PATH, encoding="utf-8").read().replace("</script>", "<\\/script>")
+        with open(_EC_PATH, encoding="utf-8") as f:
+            _ec = f.read().replace("</script>", "<\\/script>")
         ECHARTS_HTML = "<script>" + _ec + "</script>"
     else:
-        ECHARTS_HTML = ('<script src="https://registry.npmmirror.com/echarts/5.5.0/files/dist/echarts.min.js"></script>')
+        raise RuntimeError("缺少 assets/echarts.min.js，无法生成可离线使用的图表")
 
     etfs = sorted(p["etfs"], key=lambda e: e["month"])
 
@@ -964,7 +1003,7 @@ def render_html(p):
     cat_s25_tot = cat_mv25_tot = 0.0
     for cat in sorted(agg, key=lambda c: sum(x["month"] for x in agg[c]), reverse=True):
         es = agg[cat]
-        td = sum(x["today"] for x in es); wk = sum(x["week"] for x in es)
+        td = sum(x["today"] for x in es if x["today"] is not None); wk = sum(x["week"] for x in es)
         mo = sum(x["month"] for x in es); sh = sum(x["last_share"] for x in es)
         mv = sum(x["last_share"] * x["last_nav"] for x in es)
         s25 = sum(x.get("s2025", 0) for x in es)
@@ -1082,19 +1121,22 @@ def render_html(p):
     bars = ""
     for i, d in enumerate(chart):
         v = chart_total[i]
+        if v is None:
+            bars += f'<div class="col" title="{d} 数据缺失"><div class="bwrap"></div><div class="dt">{d[5:]}</div></div>'
+            continue
         h = abs(v) / maxabs * 100
         bars += f"""<div class="col" title="{d} {fnum(v,True)}亿">
           <div class="bwrap"><div class="bar {cls(v)}" style="height:{max(h,1.5):.1f}%"></div></div>
           <div class="dt">{d[5:]}</div></div>"""
 
-    # 累计持仓金额折线(SVG)
+    # 观察池资产规模折线(SVG)
     W, H = 860, 120; pad = 12
     mn, mx = min(y_mv), max(y_mv)
     if mn == mx: mn -= 1; mx += 1
     npts = len(y_mv)
     pts = []
     for i, v in enumerate(y_mv):
-        x = pad + i * (W - 2 * pad) / (npts - 1)
+        x = pad + i * (W - 2 * pad) / max(1, npts - 1)
         y = H - pad - (v - mn) / (mx - mn) * (H - 2 * pad)
         pts.append(f"{x:.1f},{y:.1f}")
     poly = " ".join(pts)
@@ -1116,13 +1158,21 @@ def render_html(p):
       "var p=YPT[i],gx=xAt(i);"
       "G.setAttribute('x1',gx);G.setAttribute('x2',gx);"
       "TIP.style.color='var(--accent)';"
-      "TIP.textContent='日期 '+p.d+'  持仓金额 '+FMT(p.v);"
+      "TIP.textContent='日期 '+p.d+'  资产规模 '+FMT(p.v);"
       "});"
       "CVD.addEventListener('mouseleave',function(){G.setAttribute('x1',-10);G.setAttribute('x2',-10);});"
       "\n</script>")
 
     def fmt_dt(d):
-        return f"{d[0:4]}-{d[5:7]}-{d[8:10]}"
+        return d if "-" in d else f"{d[:4]}-{d[4:6]}-{d[6:8]}"
+
+    quality = p.get("quality", {})
+    complete = quality.get("latest_complete", len(etfs))
+    status_text = "数据滞后" if quality.get("is_stale") else "达到本次运行期望数据日"
+    if quality.get("offline"):
+        status_text = "离线缓存重建 · " + status_text
+    missing = "、".join(quality.get("missing_latest", [])) or "无"
+    quality_html = f'<div class="quality"><b>{escape_html(status_text)}</b> · 当日可计算 {complete}/{len(etfs)} 只 · 本次运行期望 {escape_html(quality.get("expected_date", p["data_asof"]))}<br>缺失 / 待核验：{escape_html(missing)}。汇总为已覆盖样本合计，历史覆盖随数据可得性变化；“—”不计入合计，不能当作净申赎为零。K线覆盖 {quality.get("kline_coverage", 0)}/{len(dates)} 日。<br>交易日历：{"已核验覆盖本次期望日" if quality.get("calendar_verified") else "覆盖不足，暂按工作日回退，节假日可能误判"}。刷新页面只重载现有报表，采集须运行脚本或自动任务。</div>'
 
     html = f"""<!DOCTYPE html>
 <html lang="zh"><head><meta charset="utf-8">
@@ -1175,6 +1225,8 @@ table.matrix th{{font-size:10px}}
 .tbf i.pos{{background:var(--pos)}}.tbf i.neg{{background:var(--neg)}}
 
 .note{{color:var(--mut);font-size:12px;margin-top:18px;line-height:1.7}}
+.quality{{background:#fff8e6;border:1px solid #f0d994;border-radius:10px;padding:12px 14px;margin:0 0 18px;font-size:12px;color:#755715;line-height:1.8}}
+@media(max-width:600px){{.kpis{{grid-template-columns:1fr}}.wrap{{padding:14px 10px 36px}}.card{{padding:12px}}h1{{font-size:19px}}}}
 .svgwrap{{margin-top:16px}}
 .chartbox{{position:relative}}
 .cumtip{{display:block;text-align:center;margin:2px auto 4px;min-height:18px;
@@ -1198,35 +1250,36 @@ svg text{{fill:var(--mut);font-size:10px}}
       <div class="sub"><span>数据日 <b>{escape_html(p['data_asof'])}</b></span>
         <span>更新时间 <b>{escape_html(p['updated'])}</b></span>
         <span>标的口径：汇金系相关宽基ETF篮子 共 <b>{len(etfs)}</b> 只 · 全市场净申赎</span>
-        <button onclick="location.reload()" title="点击重新加载，并按沪深两市同步日期展示最新数据"
-           style="cursor:pointer;margin-left:6px;padding:4px 12px;border:1px solid var(--line,#ccc);border-radius:6px;background:var(--card,#fff);color:var(--txt,#111);font-size:12px">🔄 刷新数据</button></div>
-      <div style="color:var(--mut);font-size:12px;margin-top:6px">本表为汇金系相关宽基ETF篮子（{len(etfs)}只，含23只汇金持仓口径与救市专项口径品种）的全市场每日净申赎估算，篮子 ≠ 汇金实际持仓，无法据此准确检测汇金买卖。</div>
+        <button onclick="location.reload()" title="重新加载已生成的报表；采集更新请运行本地刷新脚本或 GitHub Actions"
+           style="cursor:pointer;margin-left:6px;padding:4px 12px;border:1px solid var(--line,#ccc);border-radius:6px;background:var(--card,#fff);color:var(--txt,#111);font-size:12px">重新加载报表</button></div>
+      <div style="color:var(--mut);font-size:12px;margin-top:6px">本表为汇金系相关宽基ETF篮子（{len(etfs)}只，含23只原始观察池与扩展观察池品种）的全市场每日净申赎估算，篮子 ≠ 汇金实际持仓，无法据此准确检测汇金买卖。</div>
     </div>
   </div>
+  {quality_html}
   <div class="kpis">
     <div class="kpi"><div class="lb">最新交易日 {fmt_dt(dates[-1])} 合计</div>
       <div class="vl {cls(today_tot)}">{fnum(today_tot, True)}</div>
-      <div class="tg {cls(today_tot)}">{ "净买入" if today_tot>=0 else "净卖出" } 亿元</div></div>
+      <div class="tg {cls(today_tot)}">{flow_label(today_tot)} 亿元</div></div>
     <div class="kpi"><div class="lb">近一周累计 (5个交易日)</div>
       <div class="vl {cls(week_tot)}">{fnum(week_tot, True)}</div>
-      <div class="tg {cls(week_tot)}">{ "净买入" if week_tot>=0 else "净卖出" } 亿元</div></div>
+      <div class="tg {cls(week_tot)}">{flow_label(week_tot)} 亿元</div></div>
     <div class="kpi"><div class="lb">近一月累计 (21个交易日)</div>
       <div class="vl {cls(month_tot)}">{fnum(month_tot, True)}</div>
-      <div class="tg {cls(month_tot)}">{ "净买入" if month_tot>=0 else "净卖出" } 亿元</div></div>
+      <div class="tg {cls(month_tot)}">{flow_label(month_tot)} 亿元</div></div>
     <div class="kpi"><div class="lb">近半年累计 (约120个交易日)</div>
       <div class="vl {cls(halfyear_tot)}">{fnum(halfyear_tot, True)}</div>
-      <div class="tg {cls(halfyear_tot)}">{ "净买入" if halfyear_tot>=0 else "净卖出" } 亿元</div></div>
+      <div class="tg {cls(halfyear_tot)}">{flow_label(halfyear_tot)} 亿元</div></div>
     <div class="kpi"><div class="lb">近一年累计 (约242个交易日)</div>
       <div class="vl {cls(oneyear_tot)}">{fnum(oneyear_tot, True)}</div>
-      <div class="tg {cls(oneyear_tot)}">{ "净买入" if oneyear_tot>=0 else "净卖出" } 亿元</div></div>
+      <div class="tg {cls(oneyear_tot)}">{flow_label(oneyear_tot)} 亿元</div></div>
     <div class="kpi"><div class="lb">今年以来累计 ({cur_year}年{len(ytd_days)}个交易日)</div>
       <div class="vl {cls(ytd_tot)}">{fnum(ytd_tot, True)}</div>
-      <div class="tg {cls(ytd_tot)}">{ "净买入" if ytd_tot>=0 else "净卖出" } 亿元</div></div>
+      <div class="tg {cls(ytd_tot)}">{flow_label(ytd_tot)} 亿元</div></div>
   </div>
   <div class="card"><h2>全部品种 · 每日净买卖合计（近21个交易日，亿元）</h2>
     <div class="bars">{bars}</div>
     <div class="svgwrap"><div class="chartbox">
-      <h2 style="font-size:14px">累计持仓金额 · 最长 {len(y_dates)}个交易日（亿元）</h2>
+      <h2 style="font-size:14px">观察池资产规模 · 最长 {len(y_dates)}个交易日（亿元）</h2>
       <div id="cumTip" class="cumtip"></div>
       <svg id="cumSvg" viewBox="0 0 {W} {H}" width="100%" height="{H}" preserveAspectRatio="none">
         <line id="cumGuide" x1="-10" y1="{pad}" x2="-10" y2="{H-pad}" stroke="#c0c6d4" stroke-width="1" stroke-dasharray="3 3"/>
@@ -1256,11 +1309,11 @@ svg text{{fill:var(--mut);font-size:10px}}
       <thead><tr><th>品种</th><th>最新份额(亿)</th><th>今日</th><th>近一周</th><th>近一月</th><th style="width:90px">近一月强度</th></tr></thead>
       <tbody>{rows}</tbody>
     </table></div>
-    <div style="color:var(--mut);font-size:11px;margin-top:8px">标注「{BASE_TAG}」的 {len(BASE23)} 只为基础口径（2025 年报披露的汇金系持仓宽基ETF）；标注「{NEW_TAG}」的 {len(NEW_TAG_CODES)} 只为 2026 年 10 月救市名单中新增纳入、此前报表未跟踪的品种。</div>
+    <div style="color:var(--mut);font-size:11px;margin-top:8px">标注「{BASE_TAG}」的 {len(BASE23)} 只为仓库原始观察池，持有人归属尚未逐项附公告核验；标注「{NEW_TAG}」的 {len(NEW_TAG_CODES)} 只为 仓库扩展观察池，此标签不证明特定机构买入。</div>
   </div>
   <div class="card"><h2>同类指数品种归集汇总（亿元）</h2>
     <div style="overflow-x:auto"><table>
-      <thead><tr><th>指数类别</th><th>今日</th><th>近一周</th><th>近一月</th><th>2025-12-31份额(亿)</th><th>2025-12-31市值(亿)</th><th>最新份额(亿)</th><th>持仓市值(亿)</th><th style="width:90px">近一月强度</th></tr></thead>
+      <thead><tr><th>指数类别</th><th>今日</th><th>近一周</th><th>近一月</th><th>2025-12-31份额(亿)</th><th>2025-12-31市值(亿)</th><th>最新份额(亿)</th><th>ETF总市值(亿)</th><th style="width:90px">近一月强度</th></tr></thead>
       <tbody>{cat_rows_html}{cat_tot_row}</tbody>
     </table></div>
     <div style="color:var(--mut);font-size:11px;margin-top:8px">将跟踪同一指数的多只 ETF 归集加总，观察该指数方向上的整体净买卖。</div>
@@ -1270,8 +1323,8 @@ svg text{{fill:var(--mut);font-size:10px}}
       <thead><tr><th>品种</th>{mcol_headers}</tr></thead>
       <tbody>{hot_html}</tbody>
     </table></div>
-    <div style="color:var(--mut);font-size:11px;margin-top:8px">每格上行=净买卖金额(亿元)，下行=倍量份额（＝当日净申购(赎回)份额 ÷ 该 ETF 自身 2025-12-31 份额×0.1%，单位倍）。
-      「0」表示该日基金份额较上一交易日无变化（申购与赎回相抵），属正常现象，非数据缺失。正值=净买入(红)，负值=净卖出(绿)。</div>
+    <div style="color:var(--mut);font-size:11px;margin-top:8px">每格上行=净买卖金额(亿元)，下行=倍量份额（＝当日净申购(赎回)份额 ÷（该 ETF 自身 2025-12-31 份额 × 0.1%），单位倍）。
+      「—」表示缺少相邻交易日份额、当日净值或疑似折算待核验；「0」表示该日基金份额较上一交易日无变化（申购与赎回相抵），属正常现象，非数据缺失。正值=净买入(红)，负值=净卖出(绿)。</div>
   </div>
   <div class="card"><h2>同类指数品种 · 每日净买卖明细（金额 / 倍量金额 · 最近{HOT}个交易日，亿元 · 可横向滚动）</h2>
     <div style="overflow-x:auto"><table class="matrix">
@@ -1279,26 +1332,57 @@ svg text{{fill:var(--mut);font-size:10px}}
       <tbody>{cat_daily_html}{cat_daily_tot}</tbody>
     </table></div>
     <div style="color:var(--mut);font-size:11px;margin-top:8px">将跟踪同一指数的多只 ETF 归集加总，观察该指数方向每日整体净买卖。
-      每格上行=净买卖金额(亿元)，下行=倍量金额（＝当日净买入金额 ÷ 该类 2025-12-31 市值×0.1%，单位倍）。
+      每格上行=净买卖金额(亿元)，下行=倍量金额（＝当日净买入金额 ÷（该类 2025-12-31 市值 × 0.1%），单位倍）。
       「0」表示该类当日份额较前日无净变化。正值=净买入(红)，负值=净卖出(绿)。</div>
   </div>
   <div class="note"><b>口径说明：</b>净买入 / 净卖出 =（当日基金份额 − 前一日基金份额）× 当日单位净值，正值=净买入(净申购)，负值=净卖出(净赎回)。
-  份额源：上交所 〈AKShare fund_etf_scale_sse(逐日)〉、深交所 〈fund_scale_daily_szse(区间批量)〉；净值源：天天基金 〈fund_open_fund_info_em〉。
-  份额为日终口径，当日净买卖反映当日申购赎回结果。数据仅为展示来源，不构成投资建议。</div>
-  <div class="foot">Generated by TRAE · 每日运行脚本自动刷新</div>
+  份额源：上交所 〈AKShare fund_etf_scale_sse(逐日)〉、深交所 〈fund_scale_daily_szse(区间批量)〉；净值源：天天基金公开净值JSON序列。
+  份额为日终口径，当日净买卖反映当日申购赎回结果。缺失值不等于零；汇总为已覆盖样本合计，历史覆盖随基金成立日期和数据源变化。资产规模缺日沿用前值，仅供观察。MSCI中国A50的K线使用560050价格代理。数据不代表未来涨跌预测，不构成投资建议。</div>
+  <div class="foot">ETF Flow · Python 采集与计算 · 静态报表</div>
   {KLN_JS}
 </div></body></html>"""
-    with open(REPORT, "w", encoding="utf-8") as f:
+    with open(REPORT + ".tmp", "w", encoding="utf-8", newline="\n") as f:
         f.write(html)
+    os.replace(REPORT + ".tmp", REPORT)
     print("报表已生成:", REPORT)
 
+def cli():
+    parser = argparse.ArgumentParser(description="采集ETF份额和净值，生成可离线使用的静态报表")
+    parser.add_argument("--offline", action="store_true", help="仅使用份额、净值、K线缓存重建，不联网")
+    parser.add_argument("--fresh-retries", type=int, default=0, choices=range(3), help="数据滞后额外重试次数（每次等待150秒），默认0")
+    parser.add_argument("--require-fresh", action="store_true", help="最新数据滞后或覆盖不足时以非零退出，保留旧报表")
+    args = parser.parse_args()
+    lock = os.path.join(OUT_DIR, ".refresh.lock")
+    try:
+        fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        print("已有刷新任务或遗留锁；确认没有运行中的刷新进程后删除 .refresh.lock", file=sys.stderr)
+        return 1
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(str(os.getpid()))
+        with network_timeout():
+            payload = main(offline=args.offline, fresh_retries=args.fresh_retries)
+        quality = payload["quality"]
+        if args.require_fresh and (quality["is_stale"] or quality["latest_complete"] < quality["target_count"]):
+            raise RuntimeError("数据日未达期望或最新交易日覆盖不足，保留原报表。")
+        render_html(payload)
+        # Every entry point produces the same homepage, without a separate manual copy.
+        for name in ("index.html", "report_latest.html"):
+            target = os.path.join(OUT_DIR, name)
+            shutil.copyfile(REPORT, target + ".tmp")
+            os.replace(target + ".tmp", target)
+        write_json(os.path.join(OUT_DIR, "_etf_data.json"), payload)
+        print("数据更新完成，最新数据日:", payload["data_asof"], "覆盖: %d/%d" % (quality["latest_complete"], quality["target_count"]), flush=True)
+        if quality["is_stale"]:
+            print("注意：当前数据滞后于期望交易日", quality["expected_date"], flush=True)
+        return 0
+    except Exception as exc:
+        print("刷新失败:", str(exc), file=sys.stderr)
+        return 1
+    finally:
+        os.remove(lock)
+
+
 if __name__ == "__main__":
-    p = main()
-    if not p:
-        sys.exit(1)
-    with open(os.path.join(OUT_DIR, "_etf_data.json"), "w", encoding="utf-8") as f:
-        json.dump(p, f, ensure_ascii=False)
-    render_html(p)
-    # ASCII 文件名副本, 供外部脚本(如 Windows 计划任务)在 ANSI 编码下安全引用
-    shutil.copyfile(REPORT, os.path.join(OUT_DIR, "report_latest.html"))
-    print("数据更新完成, 最新数据日:", p["data_asof"], "共", len(p["dates"]), "个交易日")
+    sys.exit(cli())
