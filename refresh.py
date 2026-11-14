@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 import json, time, os, sys, shutil, requests, re
 from contextlib import contextmanager
 import argparse
-from runtime import NAV_CACHE, OUT_DIR, REPORT, SHARES_CACHE, network_timeout, read_json, write_json
+from runtime import NAV_CACHE, OUT_DIR, REPORT, SHARES_CACHE, KLINE_CACHE, network_timeout, read_json, write_json, snapshot_fingerprint, last_published_state, now_bj
 from universe import CAT_INDEX, ENTRIES, TARGETS
 from fetch import CAL_DAYS, FRESH_WAIT, backfill_new_codes, expected_latest_cut, incremental_dates, load_kline_cache, load_nav, load_shares_cached, load_trade_calendar, market_kline, save_kline_cache, sync_day_of
 from calculations import calculate_daily, positive_number
@@ -79,7 +79,14 @@ def main(offline=False, fresh_retries=0, repair_limit=8):
     payload['anchor_intervals'] = anchor_intervals(anchors)
     payload['holding_bounds'] = holding_bounds(payload['daily_records'], anchors)
     payload['anchors'] = anchors
+    payload['control_reviews'] = read_json(os.path.join(OUT_DIR,'config','control_reviews.json')).get('reviews', [])
+    payload['history_verification'] = read_json(os.path.join(OUT_DIR,'data','history_verification.json'))
     payload['quality']['official_latest'] = sum(r['source_verified'] and r['f'] is not None for r in daily if r['d'] == payload['data_asof'])
+    payload['fingerprint']=snapshot_fingerprint([SHARES_CACHE,NAV_CACHE,KLINE_CACHE]+[
+        os.path.join(OUT_DIR,name) for name in ['config/universe.json','config/events.json','config/anchors.json',
+                                              'config/control_reviews.json','calculations.py','attribution.py','compute.py']])
+    previous=last_published_state()
+    payload['updated']=(previous.get('updated') if previous and previous.get('fingerprint')==payload['fingerprint'] else None) or now_bj().strftime('%Y-%m-%d %H:%M')
     return payload
 
 def cli():

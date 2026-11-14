@@ -16,9 +16,9 @@ if ($LASTEXITCODE -ne 0) { throw 'Remote main has advanced. Review and merge rem
 # Stage only the project files prepared for this release.
 $releaseFiles = @('.github/workflows/daily-refresh.yml', '.gitignore', 'README.md',
     'refresh.py', 'fetch.py', 'compute.py', 'render.py', 'runtime.py', 'universe.py',
-    'provenance.py', 'attribution.py', 'exports.py', 'config', 'data',
+    'provenance.py', 'attribution.py', 'exports.py', 'web_layout.py', 'verify_history.py', 'config', 'data',
     'calculations.py', 'requirements.txt', 'serve.py', 'start.ps1',
-    'update_and_push.ps1', 'publish.ps1', 'assets', 'docs', 'tests', 'index.html',
+    'update_and_push.ps1', 'publish.ps1', 'assets', 'docs', 'tests', 'index.html', 'flows.html', 'research.html', 'quality.html',
     '_etf_shares_cache.json', '_nav_cache.json', '_kline_cache.json',
     '启动报表.bat', '发布步骤.txt', '国家队ETF每日净买入卖出报表.html')
 $alreadyStaged = & git -c core.quotepath=false diff --cached --name-only

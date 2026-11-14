@@ -286,11 +286,13 @@
       "market": "sh",
       "category": "中证A500",
       "role": "control_candidate",
-      "control_status": "unverified",
+      "control_status": "excluded",
       "effective_from": null,
       "effective_to": null,
       "known_from": null,
-      "legacy_group": "extended"
+      "legacy_group": "extended",
+      "control_identity_clean": false,
+      "control_reviewed_at": "2026-11-14"
     },
     {
       "code": "512050",
@@ -298,11 +300,16 @@
       "market": "sh",
       "category": "中证A500",
       "role": "control_candidate",
-      "control_status": "unverified",
+      "control_status": "reviewed",
       "effective_from": null,
       "effective_to": null,
       "known_from": null,
-      "legacy_group": "extended"
+      "legacy_group": "extended",
+      "control_source_url": "https://fund.chinaamc.com/upload/resources/file/2026/08/31/fdac86d7ca524016bcd7f3b71c6e7c36.pdf",
+      "control_use_scope": "market_proxy_only",
+      "control_identity_clean": false,
+      "control_reviewed_at": "2026-11-14",
+      "control_evidence_available_at": "2026-08-31"
     },
     {
       "code": "563800",
@@ -310,11 +317,13 @@
       "market": "sh",
       "category": "中证A500",
       "role": "control_candidate",
-      "control_status": "unverified",
+      "control_status": "excluded",
       "effective_from": null,
       "effective_to": null,
       "known_from": null,
-      "legacy_group": "extended"
+      "legacy_group": "extended",
+      "control_identity_clean": false,
+      "control_reviewed_at": "2026-11-14"
     },
     {
       "code": "563220",
@@ -322,11 +331,13 @@
       "market": "sh",
       "category": "中证A500",
       "role": "control_candidate",
-      "control_status": "unverified",
+      "control_status": "excluded",
       "effective_from": null,
       "effective_to": null,
       "known_from": null,
-      "legacy_group": "extended"
+      "legacy_group": "extended",
+      "control_identity_clean": false,
+      "control_reviewed_at": "2026-11-14"
     },
     {
       "code": "159338",
@@ -334,11 +345,16 @@
       "market": "sz",
       "category": "中证A500",
       "role": "control_candidate",
-      "control_status": "unverified",
+      "control_status": "reviewed",
       "effective_from": null,
       "effective_to": null,
       "known_from": null,
-      "legacy_group": "extended"
+      "legacy_group": "extended",
+      "control_source_url": "https://st.gtfund.com/report_root/2026/08/国泰中证A500交易型开放式指数证券投资基金2026年中期报告.pdf",
+      "control_use_scope": "market_proxy_only",
+      "control_identity_clean": false,
+      "control_reviewed_at": "2026-11-14",
+      "control_evidence_available_at": "2026-08-31"
     },
     {
       "code": "159352",
@@ -346,11 +362,13 @@
       "market": "sz",
       "category": "中证A500",
       "role": "control_candidate",
-      "control_status": "unverified",
+      "control_status": "excluded",
       "effective_from": null,
       "effective_to": null,
       "known_from": null,
-      "legacy_group": "extended"
+      "legacy_group": "extended",
+      "control_identity_clean": false,
+      "control_reviewed_at": "2026-11-14"
     },
     {
       "code": "159361",
@@ -358,11 +376,16 @@
       "market": "sz",
       "category": "中证A500",
       "role": "control_candidate",
-      "control_status": "unverified",
+      "control_status": "reviewed",
       "effective_from": null,
       "effective_to": null,
       "known_from": null,
-      "legacy_group": "extended"
+      "legacy_group": "extended",
+      "control_source_url": "https://cdn.efunds.com.cn/owch/data/bulletin/20260831/易方达中证A500交易型开放式指数证券投资基金2026年中期报告.pdf",
+      "control_use_scope": "market_proxy_only",
+      "control_identity_clean": false,
+      "control_reviewed_at": "2026-11-14",
+      "control_evidence_available_at": "2026-08-31"
     },
     {
       "code": "159351",
@@ -370,11 +393,13 @@
       "market": "sz",
       "category": "中证A500",
       "role": "control_candidate",
-      "control_status": "unverified",
+      "control_status": "excluded",
       "effective_from": null,
       "effective_to": null,
       "known_from": null,
-      "legacy_group": "extended"
+      "legacy_group": "extended",
+      "control_identity_clean": false,
+      "control_reviewed_at": "2026-11-14"
     },
     {
       "code": "510180",

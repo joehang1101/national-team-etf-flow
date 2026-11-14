@@ -474,7 +474,7 @@ svg text{{fill:var(--mut);font-size:10px}}
       <button class="rng" data-n="0">全部</button>
       <span class="kpt" id="klnDate"></span></div>
     <div id="klnBox" style="height:520px;width:100%"></div>
-    <div id="klnTip" class="ktip">默认显示中证全指K线与全市场国家队ETF每日净买入联动；下拉可切换至{len(CAT_INDEX)}类细分指数（沪深300、创业板等）K线 × 该类ETF净买入合计。上方为指数日K线，下方为当日净买入金额（亿元）；红=净买入、绿=净卖出。</div>
+    <div id="klnTip" class="ktip">默认显示中证全指K线与观察池ETF每日净申赎联动；下拉可切换至{len(CAT_INDEX)}类细分指数（沪深300、创业板等）K线 × 该类ETF净买入合计。上方为指数日K线，下方为当日净买入金额（亿元）；红=净买入、绿=净卖出。</div>
   </div>
   <div class="card"><h2>分品种汇总 · 近一周 / 近一月净买入卖出（亿元，按近一月降序）</h2>
     <div style="overflow-x:auto"><table>
@@ -514,8 +514,12 @@ svg text{{fill:var(--mut);font-size:10px}}
   <div class="foot">ETF Flow · Python 采集与计算 · 静态报表</div>
   {KLN_JS}
 </div></body></html>"""
-    with open(REPORT + ".tmp", "w", encoding="utf-8", newline="\n") as f:
-        f.write(html)
-    os.replace(REPORT + ".tmp", REPORT)
-    print("报表已生成:", REPORT)
-
+    from bs4 import BeautifulSoup
+    from web_layout import write_pages
+    document = BeautifulSoup(html, 'html.parser')
+    chart_cards = document.select('div.wrap > div.card')
+    if len(chart_cards) < 6:
+        raise RuntimeError('报表图表区块不完整')
+    sections = dict(zip(['history','kline','etfs','categories','matrix','category_matrix'],
+                        [str(card) for card in chart_cards[:6]]))
+    write_pages(p, sections, bars, document.find('style').get_text(), ECHARTS_HTML, KLN_JS, REPORT)

@@ -45,11 +45,13 @@ def export_data(payload, directory):
     manifest = {'schema_version':1,'data_asof':payload['data_asof'],'universe_version':CONFIG['version'],
                 'vintage':'latest_revised','point_in_time_backtest_ready':False,
                 'missing_values':'empty CSV fields; never interpreted as zero','files':{}}
+    manifest['history_verification']=payload.get('history_verification',{})
+    manifest['snapshot_fingerprint']=payload.get('fingerprint')
     repo = Path(__file__).resolve().parent
     manifest['input_sha256'] = {name: hashlib.sha256((repo/name).read_bytes()).hexdigest()
-        for name in ['config/universe.json','config/events.json','config/anchors.json',
+        for name in ['config/universe.json','config/events.json','config/anchors.json','config/control_reviews.json',
                      '_etf_shares_cache.json','_nav_cache.json','_kline_cache.json',
-                     'calculations.py','compute.py','attribution.py'] if (repo/name).exists()}
+                     'calculations.py','compute.py','attribution.py','provenance.py','verify_history.py'] if (repo/name).exists()}
     manifest['files']['daily_etf.csv'] = write_csv(root/'daily_etf.csv',rows,fields)
     catrows, indexrows = [], []
     for i,date in enumerate(payload['dates']):
@@ -70,7 +72,13 @@ def export_data(payload, directory):
     manifest['files']['daily_indices.csv']=write_csv(root/'daily_indices.csv',indexrows,['date','index','close','is_proxy','source','pit_eligible'])
     signals=payload.get('attribution',[])
     manifest['files']['attribution_daily.csv']=write_csv(root/'attribution_daily.csv',signals,
-        ['date','code','label','evidence_grade','reason','residual_rate','extremeness_percentile','control_count','training_count','beta','fit_r2','anchor_source','identity_probability','pit_eligible'])
+        ['date','code','label','evidence_grade','reason','identity_evidence','residual_rate','extremeness_percentile',
+         'control_count','control_codes','identity_clean_control_count','training_count','beta','fit_r2',
+         'residual_low','residual_high','sensitivity_refits','sign_stable','anchor_source','identity_probability','pit_eligible'])
+    reviews=payload.get('control_reviews',[])
+    manifest['files']['control_reviews.csv']=write_csv(root/'control_reviews.csv',reviews,
+        ['code','name','decision','reviewed_at','report_date','available_at','institutional_pct','retail_pct',
+         'feeder_pct','feeder_included_in_institutional','identity_clean_verified','rationale','url','page','document_sha256'])
     intervals=payload.get('anchor_intervals',[])
     manifest['files']['anchor_intervals.csv']=write_csv(root/'anchor_intervals.csv',intervals,
         ['code','holder','start','end','available_at','share_change','status','daily_path_identifiable','source_url'])

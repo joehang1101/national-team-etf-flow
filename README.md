@@ -33,6 +33,8 @@ python -X utf8 refresh.py
 python -X utf8 refresh.py --offline
 ```
 
+全量历史核验可运行 `python -X utf8 verify_history.py --workers 4`，支持检查点恢复。已完成的官方记录不会重复请求。
+
 离线需要 `_etf_shares_cache.json`、`_nav_cache.json` 和 `_kline_cache.json`；仓库保留公共数据缓存以支持开箱演示。图表库已放在 `assets/` 并内联进HTML，打开报表不用再访问 CDN。
 
 其他选项：
@@ -42,6 +44,13 @@ python -X utf8 refresh.py --offline
 - `python -X utf8 -m unittest discover -s tests -v`：验证计算、交易日、离线链路和失败保留旧报表。
 
 页面中的“重新加载报表”只刷新浏览器，不会启动 Python。要取得新数据须运行脚本或等待 GitHub Actions。
+
+## 页面分层
+
+- `index.html`：市场概览，只看当日方向、关键指标与研究摘要。
+- `flows.html`：指数走势、资产规模、ETF与类别明细，矩阵按需展开。
+- `research.html`：统计偏离、筛选、拟合与对照剔除敏感度、披露出处。
+- `quality.html`：历史核验、下载、数据可用性和方法边界。
 
 ## 功能
 
@@ -57,6 +66,8 @@ python -X utf8 refresh.py --offline
 | 文件 | 用途 |
 |---|---|
 | `refresh.py` | 命令行入口与流程调度 |
+| `web_layout.py` / `assets/app.css` | 四页布局与统一视觉样式 |
+| `verify_history.py` | 全量历史来源核验与检查点 |
 | `fetch.py` / `compute.py` / `render.py` | 采集、汇总、网页渲染 |
 | `provenance.py` / `attribution.py` / `exports.py` | 来源修复、归因研究、CSV导出 |
 | `config/` / `data/` | 版本化观察池、事件、披露锚点 / 研究数据集 |

@@ -49,9 +49,22 @@ class PipelineTests(unittest.TestCase):
             self.assertIsNone(sz['series']['2026-11-13'])
             self.assertIsNone(payload['date_total']['20261112'])
             html = (root / 'report.html').read_text(encoding='utf-8')
-            self.assertIn('当日可计算 1/2', html)
-            self.assertIn('2026-11-13 合计', html)
+            self.assertIn('1/2 只可计算', html)
+            self.assertIn('2026-11-13', html)
             self.assertNotIn('<script src=', html)
+            from bs4 import BeautifulSoup
+            for name in ['index.html','flows.html','research.html','quality.html']:
+                page=root/name
+                self.assertTrue(page.exists(),name)
+                soup=BeautifulSoup(page.read_text(encoding='utf-8'),'html.parser')
+                self.assertEqual(len(soup.select('nav.nav a')),4)
+                self.assertEqual(len(soup.select('nav.nav a[aria-current="page"]')),1)
+                for link in soup.select('nav.nav a'):
+                    self.assertTrue((root/link['href']).exists())
+            self.assertNotIn('id="signals"',html)
+            self.assertNotIn('id="klnBox"',html)
+            self.assertIn('klnBox',(root/'flows.html').read_text(encoding='utf-8'))
+            self.assertIn('id="signals"',(root/'research.html').read_text(encoding='utf-8'))
             self.assertEqual((root / 'shares.json').read_bytes(), original)
 
     def test_strict_failure_preserves_existing_homepage_and_releases_lock(self):

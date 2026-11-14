@@ -8,11 +8,11 @@
   "files": {
     "daily_etf.csv": {
       "rows": 43248,
-      "sha256": "e1eac400e6d13e71c4004fdc52c3454c92fb995cefec94d37671f48c49523467"
+      "sha256": "f43b2529f80d3a69c5b467c34a9b08673d6d360a37a5696b67094744dac379b9"
     },
     "daily_categories.csv": {
       "rows": 15264,
-      "sha256": "9c0dd5ff417d49a60b81fa062e4c2f778e99594e756ed5e02cc4bc8a4361e0e4"
+      "sha256": "99e00d8da6c17a912ddd32841aeecf2b26bebc3d264d16759fa7e69c6369f797"
     },
     "daily_indices.csv": {
       "rows": 16536,
@@ -20,26 +20,54 @@
     },
     "attribution_daily.csv": {
       "rows": 33072,
-      "sha256": "25a8f8e43da824d94dbb1840a5160a65809bb45db71e9ed63680f807d1b36d79"
+      "sha256": "fc35aca0ca15973d9d648b035b55f529912201570632ef50b48e714841aaee3c"
+    },
+    "control_reviews.csv": {
+      "rows": 8,
+      "sha256": "424e238fb131e0b75a62e48484cf812ae53455aa7a30518447a0bf044b8a6304"
     },
     "anchor_intervals.csv": {
       "rows": 2,
       "sha256": "b817ae6ab54f5882db39a26277fe0113da613b98d70713e17eb38cb416ab131f"
     },
     "holding_bounds.csv": {
-      "rows": 10,
-      "sha256": "9eb781c786a16613d5ad67bd0ad026124df953700fcecaab139dd8acfec742e4"
+      "rows": 290,
+      "sha256": "b0779b03c97d7dc97b11e91dd7be73a67a968d7eb04584421d1cc2f8e89c67e8"
     }
   },
+  "history_verification": {
+    "started_with": {
+      "counts": {
+        "sse": 255,
+        "szse": 151,
+        "legacy_unknown": 32629
+      },
+      "pending_dates": 1259
+    },
+    "finished_with": {
+      "counts": {
+        "sse": 23314,
+        "szse": 12986
+      },
+      "pending_dates": 0
+    },
+    "jobs": 1287,
+    "failures": 0,
+    "changed_records": 35894
+  },
+  "snapshot_fingerprint": "2d8c8deeb62b5530938c9d6da1c1e9c645b58e0602302f63fddbd18a35dc0d30",
   "input_sha256": {
-    "config/universe.json": "c4f01448ad164a087f170517298f99227092fedcc64ae68a012221609aca1d38",
+    "config/universe.json": "0b585ffe024c7dda72b10270f9c687d2e3a0b173b5f296616e70dd7cca0cae5a",
     "config/events.json": "db5114221f17e827ff297da1b5bc9be7a0dd29730e02fe397ca8b8034513459f",
     "config/anchors.json": "b1c91ae21bbfc72febb65a61e37a07282495bbf8e0306f4d4c8a36d399f4e215",
-    "_etf_shares_cache.json": "cdad5cb9b0a2716930c77be11985f26309b38f0daf16cb431a28fcb4b1fabe29",
+    "config/control_reviews.json": "f80a3677d5bd36d4956d6cfbfe9aab068f59fc993d51be30ccb11dce88916325",
+    "_etf_shares_cache.json": "95c1c02a592b36ffc7d8aac39a6fa8edf963d63e04a9449153133f070f432a3b",
     "_nav_cache.json": "5affceee0bbec3af5633c662937792a145271c475490e456cebf8e655e648331",
     "_kline_cache.json": "65db26849350b1536ecc32403748222d0f19000dc64a1a115df67dee9b949ea8",
     "calculations.py": "3936e647519cc6906cb7ea535afeb95673b70efb4f6b40b1e8bffeaf071557ff",
     "compute.py": "73c70260fab998eb54fcddf906be153ce32f8f3c2babca9cfd9615103b6db966",
-    "attribution.py": "378d9eef578d3bceaadd3d95b007ffdb5cd55d4f4fb1ae867b98bfac792fa66a"
+    "attribution.py": "48ee6043337440a366ac98ac81f01093ad28c086b7bd0c5b615ee8a6d46e504c",
+    "provenance.py": "6af5a78e19e59e28e937e11c9c52a907b3a4440fa03a5ecefa5c0fa1dd8d7f2d",
+    "verify_history.py": "144ac2935af5243b5210dd4a0cbbf005574169e217c3f26e1d97a4e23b73f9dc"
   }
 }

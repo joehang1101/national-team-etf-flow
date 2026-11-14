@@ -39,7 +39,7 @@ https://github.com/joehang1101/national-team-etf-flow
 3. 在 **Build and deployment → Source** 中选择 **GitHub Actions**。本项目已经带工作流，不需要再选择Jekyll模板。
 4. 点 **Settings → Actions → General**，确认允许此仓库运行官方Actions；工作流本身声明所需的 `contents: write`、`pages: write` 和 `id-token: write` 权限。若组织策略或分支保护限制bot写入，须按对应提示调整。
 
-这里只发布生成的首页，不会将整个仓库文件作为网站目录上传。
+这里只发布生成的四个HTML页面和data研究数据目录，不会将整个仓库文件作为网站目录上传。
 
 ### 3. 上传这次准备好的项目改动
 

@@ -8,6 +8,7 @@ SOURCE_URLS = {'sse': 'https://www.sse.com.cn/assortment/fund/etf/list/scale/',
 
 
 def migrate_cache(cache):
+    cache.setdefault('shares', {})
     meta = cache.setdefault('share_meta', {})
     for day, values in cache.get('shares', {}).items():
         for code in values:

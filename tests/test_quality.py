@@ -11,9 +11,22 @@ from fetch import date_batches, sync_day_of
 from attribution import known_anchors, anchor_intervals, attribute, holding_bounds
 from universe import members_on
 from exports import write_csv
+from verify_history import pending_by_market
+from runtime import snapshot_fingerprint
 
 
 class ProvenanceTests(unittest.TestCase):
+    def test_snapshot_changes_on_content_revision(self):
+        with tempfile.TemporaryDirectory() as d:
+            p=Path(d)/'input.json';p.write_text('one')
+            a=snapshot_fingerprint([str(p)])
+            self.assertEqual(a,snapshot_fingerprint([str(p)]))
+            p.write_text('two')
+            self.assertNotEqual(a,snapshot_fingerprint([str(p)]))
+    def test_full_history_plan_only_includes_unknown_exchange_dates(self):
+        cache=migrate_cache({'shares':{'20200102':{'510300':100,'159919':100}}})
+        merge_observation(cache,'20200102','510300',100,'sse','known')
+        self.assertEqual(pending_by_market(cache),{'sh':[],'sz':['20200102']})
     def test_migration_preserves_values_without_inventing_official_source(self):
         cache={'shares':{'20200102':{'510300':123}}}
         migrate_cache(cache); migrate_cache(cache)
@@ -147,6 +160,34 @@ class SyncAndEvidenceTests(unittest.TestCase):
         self.assertGreater(result[-1]['residual_rate'],.4)
         self.assertEqual(result[-1]['evidence_grade'],'低')
         self.assertIsNone(result[-1]['identity_probability'])
+        self.assertEqual(result[-1]['sensitivity_refits'],3)
+
+    def test_market_proxy_review_cannot_be_promoted_to_identity_evidence(self):
+        from datetime import date,timedelta
+        entries=[{'code':'1','role':'candidate'}]+[{'code':str(i),'role':'control_candidate','control_status':'reviewed',
+            'control_evidence_available_at':'2020-01-01','control_source_url':'https://example.com',
+            'control_identity_clean':False,'known_from':None} for i in (2,3,4)]
+        rows=[]
+        for i in range(25):
+            day=(date(2020,1,1)+timedelta(days=i)).strftime('%Y%m%d'); x=(i%7-3)*.001
+            for code in ('1','2','3','4'):
+                rate=2*x if code=='1' else x
+                if code=='1' and i==24:rate=.5
+                rows.append({'d':day,'c':code,'f':rate*100,'previous_share':100,'previous_nav':1,'backtest_eligible':True})
+        anchor={'code':'1','holder':'test','report_date':'20200101','published_at':'2020-01-01','shares':100,
+                'verified':True,'source_url':'https://example.com'}
+        r=attribute(rows,entries,[anchor])[-1]
+        self.assertEqual(r['evidence_grade'],'低')
+        self.assertNotIn('国家队',r['label'])
+        self.assertEqual(r['identity_clean_control_count'],0)
+
+    def test_review_availability_does_not_remove_historical_fund_membership(self):
+        e={'code':'1','role':'control_candidate','control_status':'reviewed','known_from':None,
+            'control_evidence_available_at':'2026-08-31','control_source_url':'https://example.com'}
+        self.assertEqual(members_on('20250101',entries=[e]),[e])
+        r=attribute([{'d':'20260828','c':'t','f':1,'previous_share':100,'previous_nav':1,'backtest_eligible':True}],
+                    [e,{'code':'t','role':'candidate'}],[])[0]
+        self.assertEqual(r['control_count'],0)
 
 
 if __name__=='__main__': unittest.main()

@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor
 import json, time, os, sys, shutil, requests, re
+import hashlib
 from contextlib import contextmanager
 
 OUT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -52,7 +53,18 @@ def last_published_state():
             continue
         day = re.search(r"数据日\s*<b>(\d{8})</b>", s)
         upd = re.search(r"更新时间\s*<b>([^<]+)</b>", s)
+        fingerprint = re.search(r'<meta name="dataset-fingerprint" content="([a-f0-9]+)"', s)
         if day:
-            return {"day": day.group(1), "updated": (upd.group(1) if upd else None)}
+            return {"day": day.group(1), "updated": (upd.group(1) if upd else None),
+                    'fingerprint':fingerprint.group(1) if fingerprint else None}
     return None
+
+
+def snapshot_fingerprint(paths):
+    digest=hashlib.sha256()
+    for path in paths:
+        if os.path.exists(path):
+            digest.update(os.path.basename(path).encode('utf-8'))
+            with open(path,'rb') as f:digest.update(f.read())
+    return digest.hexdigest()
 

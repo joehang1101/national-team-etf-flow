@@ -1,0 +1,9 @@
+﻿code,name,decision,reviewed_at,report_date,available_at,institutional_pct,retail_pct,feeder_pct,feeder_included_in_institutional,identity_clean_verified,rationale,url,page,document_sha256
+563360,A500ETF 华泰柏瑞,excluded_missing_current_holder_evidence,2026-11-14,20260630,,,,,,False,尚无本次已核对的完整持有人证据，不参与模型；不等于已知有国家队持仓,,,
+512050,华夏中证A500ETF,market_proxy_only,2026-11-14,20260630,2026-08-31,51.03,9.46,39.51,False,False,持有人结构并非散户主导，且没有可验证完整受益人身份；仅作共同申赎因子，不能作无国家队的因果对照,https://fund.chinaamc.com/upload/resources/file/2026/08/31/fdac86d7ca524016bcd7f3b71c6e7c36.pdf,70,5a78b3426ea96fe1c952097e0ea5652ae800231374688027015be3412bee40fd
+563800,A500ETF 广发,excluded_missing_current_holder_evidence,2026-11-14,20260630,,,,,,False,尚无本次已核对的完整持有人证据，不参与模型；不等于已知有国家队持仓,,,
+563220,A500ETF 富国,excluded_missing_current_holder_evidence,2026-11-14,20260630,,,,,,False,尚无本次已核对的完整持有人证据，不参与模型；不等于已知有国家队持仓,,,
+159338,国泰中证A500ETF,market_proxy_only,2026-11-14,20260630,2026-08-31,72.9,20.7,6.39,False,False,持有人结构并非散户主导，且没有可验证完整受益人身份；仅作共同申赎因子，不能作无国家队的因果对照,https://st.gtfund.com/report_root/2026/08/国泰中证A500交易型开放式指数证券投资基金2026年中期报告.pdf,58,8cf6ef5ac4b50bab1a63f177e34e534075b89c19b41042de7d1c6207947947fb
+159352,A500ETF 南方,excluded_missing_current_holder_evidence,2026-11-14,20260630,,,,,,False,尚无本次已核对的完整持有人证据，不参与模型；不等于已知有国家队持仓,,,
+159361,易方达中证A500ETF,market_proxy_only,2026-11-14,20260630,2026-08-31,95.06,4.94,24.72,True,False,持有人结构并非散户主导，且没有可验证完整受益人身份；仅作共同申赎因子，不能作无国家队的因果对照,https://cdn.efunds.com.cn/owch/data/bulletin/20260831/易方达中证A500交易型开放式指数证券投资基金2026年中期报告.pdf,60,b2322d5745fa1817d68f3de3e90044b4f11cabd42ab5db9ee051c32a40a37b57
+159351,A500ETF 嘉实,excluded_missing_current_holder_evidence,2026-11-14,20260630,,,,,,False,尚无本次已核对的完整持有人证据，不参与模型；不等于已知有国家队持仓,,,
