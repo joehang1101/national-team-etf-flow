@@ -10,19 +10,21 @@
 
 ## 当前交付状态
 
-本地采集和报表已验收，部署步骤已加入 `.github/workflows/daily-refresh.yml`。本次环境中的GitHub连接器写操作被审批策略拒绝，本机CLI令牌失效，因此这些改动尚未上传，云端部署未完成。下面是完成首次上线所需的操作。
+2026-11-14已上传代码并创建GitHub Pages站点，采用GitHub Actions部署。网站固定地址为 https://joehang1101.github.io/national-team-etf-flow/ 。首次发布使用已验收的2026-11-13报表；实时上线验收记录见“本次验收.md”。下面保留首次配置及日常更新的完整操作。
 
 ## 第一次上线
 
 ### 1. 重新登录本机 GitHub
 
-在本机打开 PowerShell：
+在本机打开 PowerShell，每条命令单独执行：
 
 ```powershell
 cd E:\AI\national-team-etf-flow
 gh auth login --hostname github.com --web --git-protocol https
 gh auth setup-git
 ```
+
+如果使用CMD（提示符类似 `C:\Users\zhouhang>`），切换目录请用 `cd /d E:\AI\national-team-etf-flow`。不要把多条命令粘成一行。浏览器登录与CLI登录是分开的。
 
 按终端提示在浏览器登录 `joehang1101`，确认这是拥有仓库写入权限的账号。GitHub若要求授权工作流权限，应允许上传仓库内 `.github/workflows/` 的变更。不要把个人Token写入代码或发到聊天。
 
@@ -61,7 +63,7 @@ git config user.email "你的GitHub提交邮箱"
 ### 4. 查看第一次部署
 
 1. 打开仓库 **Actions**。
-2. 点击 **每日自动刷新国家队ETF报表** 最近的一次任务。推送main会自动触发，也可以点该工作流 → **Run workflow → main → Run workflow**。
+2. 点击 **每日自动刷新国家队ETF报表** 最近的一次任务。工作流配置支持推送main触发；若没有出现运行记录，可以点该工作流 → **Run workflow → main → Run workflow**。
 3. 等待安装依赖、测试、采集、提交、配置Pages、上传网页、发布网页完成，采集可能需要几分钟。
 4. 任务应为绿色，最后的“发布网页”步骤应给出网站地址。
 5. 打开：
@@ -74,7 +76,7 @@ https://joehang1101.github.io/national-team-etf-flow/
 
 通常无需开电脑。云端每天按北京时间07:45至09:30每15分钟、16:00及23:00运行。GitHub定时触发可能延迟，交易所数据也可能晚发布；周末及节假日没有新交易数据通常正常。
 
-立即更新：进入 **Actions → 每日自动刷新国家队ETF报表 → Run workflow**。刷新网页只重新加载已有网页，不能代替这个操作。
+立即更新：进入 **Actions → 每日自动刷新国家队ETF报表 → Run workflow**。保留“先联网采集新数据”勾选，再运行；若只想重新发布仓库中已有的报表，取消勾选后运行。刷新网页只重新加载已有网页，不能代替这个操作。
 
 以后修改代码：本机测试后正常 `git add`、`git commit`、`git push`，推送main将触发更新与部署。`publish.ps1`为本次首次发布准备，若已有暂存变更需先自行检查处理。
 
