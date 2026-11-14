@@ -7,15 +7,18 @@ import unittest
 from unittest.mock import patch
 
 import refresh
+import fetch
+import compute
+import render
 
 
 class PipelineTests(unittest.TestCase):
     def test_nav_json_is_parsed_without_javascript_and_in_beijing_time(self):
         text = 'var Data_netWorthTrend = [{"x":1794499200000,"y":1.25,"equityReturn":0,"unitMoney":""}]; other();'
-        values = refresh.parse_nav_text(text)
+        values = fetch.parse_nav_text(text)
         self.assertEqual(values, {'20261113': 1.25})
         with self.assertRaises(ValueError):
-            refresh.parse_nav_text('<html>access denied</html>')
+            fetch.parse_nav_text('<html>access denied</html>')
 
     def test_offline_partial_data_renders_without_network_or_cache_loss(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -30,9 +33,11 @@ class PipelineTests(unittest.TestCase):
             with contextlib.ExitStack() as stack:
                 stack.enter_context(patch.object(refresh, 'SHARES_CACHE', str(root / 'shares.json')))
                 stack.enter_context(patch.object(refresh, 'NAV_CACHE', str(root / 'nav.json')))
-                stack.enter_context(patch.object(refresh, 'KLINE_CACHE', str(root / 'klines.json')))
-                stack.enter_context(patch.object(refresh, 'REPORT', str(root / 'report.html')))
-                stack.enter_context(patch.object(refresh, 'TARGETS', [('510300', 'test SH', 'sh'), ('159919', 'test SZ', 'sz')]))
+                stack.enter_context(patch.object(render, 'REPORT', str(root / 'report.html')))
+                
+                for module in (refresh, compute, fetch):
+                    stack.enter_context(patch.object(module, 'TARGETS', [('510300', 'test SH', 'sh'), ('159919', 'test SZ', 'sz')]))
+                stack.enter_context(patch.object(fetch, 'KLINE_CACHE', str(root / 'klines.json')))
                 stack.enter_context(patch.object(refresh.requests.sessions.Session, 'request', side_effect=AssertionError('offline network call')))
                 stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
                 payload = refresh.main(offline=True)

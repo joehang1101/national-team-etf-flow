@@ -3,7 +3,7 @@ from datetime import datetime
 from unittest.mock import patch
 
 from calculations import calculate_daily
-import refresh
+import fetch as refresh
 
 
 class CalculationTests(unittest.TestCase):

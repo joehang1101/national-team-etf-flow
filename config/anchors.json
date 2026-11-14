@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "anchors": [
+    {
+      "code": "510300",
+      "holder": "中央汇金资产管理有限责任公司",
+      "report_date": "20251231",
+      "published_at": "2026-03-31",
+      "shares": 37858474974,
+      "share_basis": "510300-reported-nominal-shares-2025",
+      "source_url": "https://www.sse.com.cn/disclosure/fund/announcement/c/new/2026-03-31/510300_20260331_W6CZ.pdf",
+      "pdf_page": 75,
+      "report_section": "9.2",
+      "verified": true,
+      "document_sha256": "9790cc85c6ee6611d52e653f4154632eff35d588185d1269cadc77082f5fb4c4"
+    },
+    {
+      "code": "510300",
+      "holder": "中央汇金投资有限责任公司",
+      "report_date": "20251231",
+      "published_at": "2026-03-31",
+      "shares": 35654598859,
+      "share_basis": "510300-reported-nominal-shares-2025",
+      "source_url": "https://www.sse.com.cn/disclosure/fund/announcement/c/new/2026-03-31/510300_20260331_W6CZ.pdf",
+      "pdf_page": 75,
+      "report_section": "9.2",
+      "verified": true,
+      "document_sha256": "9790cc85c6ee6611d52e653f4154632eff35d588185d1269cadc77082f5fb4c4"
+    },
+    {
+      "code": "510300",
+      "holder": "中央汇金资产管理有限责任公司",
+      "report_date": "20250630",
+      "published_at": "2025-08-30",
+      "shares": 37858474974,
+      "share_basis": "510300-reported-nominal-shares-2025",
+      "source_url": "https://www.sse.com.cn/disclosure/fund/announcement/c/new/2025-08-30/510300_20250830_9SZQ.pdf",
+      "report_section": "8.2",
+      "verified": true,
+      "pdf_page": 58,
+      "verification_method": "SSE report table indexed text; original download blocked by TLS"
+    },
+    {
+      "code": "510300",
+      "holder": "中央汇金投资有限责任公司",
+      "report_date": "20250630",
+      "published_at": "2025-08-30",
+      "shares": 35654598859,
+      "share_basis": "510300-reported-nominal-shares-2025",
+      "source_url": "https://www.sse.com.cn/disclosure/fund/announcement/c/new/2025-08-30/510300_20250830_9SZQ.pdf",
+      "report_section": "8.2",
+      "verified": true,
+      "pdf_page": 58,
+      "verification_method": "SSE report table indexed text; original download blocked by TLS"
+    }
+  ]
+}

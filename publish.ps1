@@ -15,7 +15,9 @@ if ($LASTEXITCODE -ne 0) { throw 'Fetch failed; check network and login.' }
 if ($LASTEXITCODE -ne 0) { throw 'Remote main has advanced. Review and merge remote changes before publishing.' }
 # Stage only the project files prepared for this release.
 $releaseFiles = @('.github/workflows/daily-refresh.yml', '.gitignore', 'README.md',
-    'refresh.py', 'calculations.py', 'requirements.txt', 'serve.py', 'start.ps1',
+    'refresh.py', 'fetch.py', 'compute.py', 'render.py', 'runtime.py', 'universe.py',
+    'provenance.py', 'attribution.py', 'exports.py', 'config', 'data',
+    'calculations.py', 'requirements.txt', 'serve.py', 'start.ps1',
     'update_and_push.ps1', 'publish.ps1', 'assets', 'docs', 'tests', 'index.html',
     '_etf_shares_cache.json', '_nav_cache.json', '_kline_cache.json',
     '启动报表.bat', '发布步骤.txt', '国家队ETF每日净买入卖出报表.html')

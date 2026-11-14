@@ -64,7 +64,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add index.html "国家队ETF每日净买入卖出报表.html" _etf_shares_cache.json _nav_cache.json
+          git add index.html "国家队ETF每日净买入卖出报表.html" _etf_shares_cache.json _nav_cache.json data
           [ -f _kline_cache.json ] && git add _kline_cache.json
           if git diff --cached --quiet; then
             echo "报表无变化, 跳过提交"
@@ -77,6 +77,7 @@ jobs:
         run: |
           mkdir -p _site
           cp index.html _site/index.html
+          cp -R data _site/data
           touch _site/.nojekyll
 
       - name: 配置 GitHub Pages

@@ -56,7 +56,10 @@ python -X utf8 refresh.py --offline
 
 | 文件 | 用途 |
 |---|---|
-| `refresh.py` | 采集、缓存合并、指标汇总、HTML生成和命令行入口 |
+| `refresh.py` | 命令行入口与流程调度 |
+| `fetch.py` / `compute.py` / `render.py` | 采集、汇总、网页渲染 |
+| `provenance.py` / `attribution.py` / `exports.py` | 来源修复、归因研究、CSV导出 |
+| `config/` / `data/` | 版本化观察池、事件、披露锚点 / 研究数据集 |
 | `calculations.py` | 纯计算：相邻交易日差分、缺失处理、疑似折算标记 |
 | `_etf_shares_cache.json` | 每日每只ETF的总份额、交易日历与历史回补状态 |
 | `_nav_cache.json` | 每只ETF每日单位净值；采集失败保留已有历史 |
@@ -68,7 +71,7 @@ python -X utf8 refresh.py --offline
 | `serve.py` / `start.ps1` | 本机静态预览服务/启动入口 |
 | `update_and_push.ps1` | 默认仅刷新；显式加 `-Push` 才提交生成文件并推送当前origin |
 
-详细原理和边界见 [docs/实现原理.md](docs/实现原理.md)。
+详细原理见 [docs/实现原理.md](docs/实现原理.md)，当前来源追踪、模块结构、CSV与归因研究规则以 [数据质量与归因](docs/数据质量与归因.md) 为准。
 
 ## GitHub 自动更新和发布
 
@@ -91,6 +94,8 @@ python -X utf8 refresh.py --offline
 ## 数据口径
 
 日净申赎估算（亿元）＝（当日总份额－上一交易日总份额）× 当日单位净值 ÷ 100000000。
+
+`config/events.json`支持公告确认的份额折算；`data/`输出日度CSV和校验清单。归因模块输出证据等级，不输出身份概率。
 
 缺少相邻交易日份额或当日净值时显示“—”，不拿旧净值计算，也不把跨多日变化归给一天。疑似份额折算同样留空待核验。合计仅包含可计算样本，历史覆盖可能变化；未做固定样本可比性调整。资产规模＝各ETF总份额×净值的加总，缺日沿用可用前值，不是汇金持仓价值。
 
