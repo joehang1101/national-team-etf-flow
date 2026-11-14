@@ -18,6 +18,11 @@ on:
     - cron: "0 8 * * *"      # 16:00 北京 每天
     - cron: "0 15 * * *"     # 23:00 北京 每天
   workflow_dispatch:
+    inputs:
+      refresh_data:
+        description: 先联网采集新数据（关闭则直接发布仓库中已有报表）
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -51,11 +56,11 @@ jobs:
         run: python -m unittest discover -s tests -v
 
       - name: 运行刷新脚本(拉份额/净值/K线, 计算净买卖, 生成报表)
-        if: github.event_name != 'push'
+        if: github.event_name != 'push' && (github.event_name != 'workflow_dispatch' || inputs.refresh_data)
         run: python refresh.py
 
       - name: 提交生成报表及份额、净值、K线缓存
-        if: github.event_name != 'push'
+        if: github.event_name != 'push' && (github.event_name != 'workflow_dispatch' || inputs.refresh_data)
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
