@@ -3,9 +3,10 @@ from collections import Counter
 from html import escape
 from pathlib import Path
 import os
+from feature_layout import signals_body, state_summary
 
 
-NAV=[('index.html','市场概览','01'),('flows.html','资金流明细','02'),('research.html','归因研究','03'),('quality.html','数据与方法','04')]
+NAV=[('index.html','市场概览','01'),('signals.html','状态与特征','02'),('flows.html','资金流明细','03'),('research.html','归因研究','04'),('quality.html','数据与方法','05')]
 
 
 def number(value, signed=False, digits=2):
@@ -38,7 +39,7 @@ def kpis(p):
     for label,days in [('最新交易日',dates[-1:]),('近一周 · 5日',dates[-5:]),('近一月 · 21日',dates[-21:])]:
         values=[data[d] for d in days if data.get(d) is not None]
         value=sum(values) if values else None
-        items.append(f'<div class="kpi"><div class="lb">{label}</div><div class="vl {tone(value)}">{number(value,True)}</div><div class="tg muted">亿元 · 已覆盖样本合计</div></div>')
+        items.append(f'<div class="kpi"><div class="lb">{label}</div><div class="vl {tone(value)}">{number(value,True)}</div><div class="tg muted">亿元 · 全观察池（含A500对照）已覆盖合计</div></div>')
     return '<div class="kpis">'+''.join(items)+'</div>'
 
 
@@ -69,8 +70,8 @@ def write_pages(p, cards, bars, legacy_css, echarts, kline_js, report):
     direction='净申购' if daily is not None and daily>=0 else '净赎回'
     categories=p.get('cat_total',{}).get(p['data_asof'],{})
     leaders=''.join(f'<div class="category-line"><span>{escape(cat)}</span><b class="{tone(v)}">{number(v,True)} 亿</b></div>' for cat,v in sorted(categories.items(),key=lambda x:abs(x[1]),reverse=True)[:6])
-    overview=f'''<section class="card hero"><div class="hero-row"><div><div class="eyebrow">观察池当日合计 · {direction}</div><div class="hero-value">{number(daily,True)}<span>亿元</span></div><p>近一日的申赎方向已知；交易主体仍需披露与多重证据核验。</p><div class="pill-row">{pill(str(q['latest_complete'])+'/'+str(q['target_count'])+' 只可计算')}{pill('数据滞后' if q['is_stale'] else '达到期望数据日')}</div></div><div class="hero-side"><b>{q.get('official_latest',0)}/{q['target_count']}</b>相邻两日官方份额覆盖<br><a href="quality.html" style="color:white">查看数据质量 →</a></div></div></section>'''+kpis(p)
-    overview+=f'''<div class="grid-two"><section class="card"><div class="section-head"><h2>每日申赎方向</h2><a href="flows.html">查看走势与明细 →</a></div><p class="small muted">近21个交易日 · 亿元</p><div class="bars">{bars}</div></section><section class="card"><div class="section-head"><h2>指数方向</h2><a href="flows.html#categories">全部类别 →</a></div>{leaders}</section></div>
+    overview=state_summary(p)+f'''<div class="pill-row">{pill(str(q['latest_complete'])+'/'+str(q['target_count'])+' 只可计算')}{pill('数据滞后' if q['is_stale'] else '达到期望数据日')}</div>'''+kpis(p)
+    overview+=f'''<div class="grid-two"><section class="card"><div class="section-head"><h2>每日申赎方向</h2><a href="flows.html">查看走势与明细 →</a></div><p class="small muted">近21个交易日 · 全观察池（含A500对照）· 亿元</p><div class="bars">{bars}</div></section><section class="card"><div class="section-head"><h2>指数方向</h2><a href="flows.html#categories">全部类别 →</a></div>{leaders}</section></div>
 <div class="grid-equal"><section class="card"><div class="section-head"><h2>归因研究摘要</h2><a href="research.html">打开研究页 →</a></div><div class="big-stat">{len(alerts)} <span class="small muted">只出现增量偏离</span></div><p>{len(modeled)}/{len(latest)} 只具备因子估计结果。当前对照仅用于共同情绪调整，机构身份归因仍受限制。</p><div class="insight"><strong>先看异常，再看它是否稳健</strong><p>研究页列出历史异常分位、拟合解释力和剔除单只对照后的残差区间。</p></div></section><section class="card"><div class="section-head"><h2>历史核验进度</h2><a href="quality.html">查看记录 →</a></div><div class="big-stat">{percent:.1f}%</div><p>已有份额记录的官方来源覆盖</p><div class="progress"><span style="width:{percent:.2f}%"></span></div><p>{official:,}/{total:,} 条已有记录已核验；来源待核验日期 {p.get('lineage',{}).get('pending_dates',0):,} 个。数据可得性缺口另行标记。</p></section></div>'''
     flows=kpis(p)+'<nav class="subnav" aria-label="资金流章节"><a href="#trend">指数联动</a><a href="#history">规模历史</a><a href="#categories">指数汇总</a><a href="#etfs">ETF明细</a></nav>'
     flows+='<section id="trend">'+cards['kline'].replace('<select id="klnCat"','<select aria-label="选择跟踪指数" id="klnCat"')+'</section><section id="history">'+cards['history']+'</section>'
@@ -92,13 +93,14 @@ def write_pages(p, cards, bars, legacy_css, echarts, kline_js, report):
     if bounds:
         bound_rows=''.join(f'<tr><td>{b["code"]}</td><td>{b["anchor_date"]}</td><td class="r">{b["anchor_holdings"]/1e8:,.2f}</td><td class="r">{b["holding_max"]/1e8:,.2f}</td><td class="r">{b["minimum_holding_reduction"]/1e8:,.2f}</td></tr>' for b in bounds)
         research+='<section class="card"><h2>披露锚点的条件约束</h2><p>在份额单位可比、没有未记录折算的条件下，已披露账户的持仓不可能超过当前ETF总份额，因此可得到相对锚点的持仓减少下限。</p><div class="table-scroll"><table><thead><tr><th>ETF</th><th>锚点报告期</th><th class="r">锚点合计亿份</th><th class="r">当前ETF总亿份</th><th class="r">条件减少下限亿份</th></tr></thead><tbody>'+bound_rows+'</tbody></table></div><p>这是从报告期至今的区间约束，不能定位到某一天；减少还可能通过二级市场交易发生。若发现折算或披露口径变更，须重算。</p></section>'
-    downloads=[('daily_etf.csv','ETF日度结果','份额、净值、净申赎及来源'),('daily_categories.csv','指数归集','每日金额及覆盖数'),('daily_indices.csv','指数收盘','历史行情与代理标记'),('attribution_daily.csv','归因研究','残差、拟合、证据与敏感度'),('control_reviews.csv','对照审查','审查决定及报告出处'),('anchor_intervals.csv','披露端点','两期持有人份额净变化'),('holding_bounds.csv','条件容量区间','带假设的持仓范围'),('manifest.json','数据清单','文件行数、版本、SHA-256'),('history_verification.json','历史核验报告','批次、失败数与覆盖变化')]
+    downloads=[('features_daily.csv','日度特征','候选池、逐只ETF的标准化与背景'),('features_latest.json','当前状态摘要','机器可读特征、覆盖和状态依据'),('daily_etf.csv','ETF日度结果','份额、净值、净申赎及来源'),('daily_categories.csv','指数归集','每日金额及覆盖数'),('daily_indices.csv','指数收盘','历史行情与代理标记'),('attribution_daily.csv','归因研究','残差、拟合、证据与敏感度'),('control_reviews.csv','对照审查','审查决定及报告出处'),('anchor_intervals.csv','披露端点','两期持有人份额净变化'),('holding_bounds.csv','条件容量区间','带假设的持仓范围'),('manifest.json','数据清单','文件行数、版本、SHA-256'),('history_verification.json','历史核验报告','批次、失败数与覆盖变化')]
     quality=f'''<div class="kpis"><div class="kpi"><div class="lb">已有份额记录 · 官方来源</div><div class="vl">{percent:.1f}%</div><div class="tg muted">{official:,}/{total:,} 条</div></div><div class="kpi"><div class="lb">来源待核验日期</div><div class="vl">{p.get('lineage',{}).get('pending_dates',0):,}</div><div class="tg muted">仅指已有记录，非所有潜在缺口</div></div><div class="kpi"><div class="lb">最新日可计算</div><div class="vl">{q['latest_complete']}/{q['target_count']}</div><div class="tg muted">两日官方份额 {q.get('official_latest',0)}/{q['target_count']}</div></div></div>
 <section class="card"><h2>核验结果与可用性</h2><div class="insight"><strong>来源核验与数据完整性分别检查</strong><p>官方核验只覆盖已有记录及此次取得的有效日期，成立前、未取得的净值、疑似折算等仍保留为空。历史样本数随基金存续和数据可得性变化。当前历史净申赎可计算 {valid_flows:,} 条，疑似折算 {status_counts.get('possible_split',0)} 条留空待核验。</p></div><div class="insight"><strong>目前为修订数据集</strong><p>份额可追溯到官方，但尚无完整首次发布时间与逐次不可覆盖快照；不能直接当作严格时点回测集。</p></div><div class="insight"><strong>缺失与来源</strong><p>最新缺失代码：{escape('、'.join(q.get('missing_latest',[])) or '无')}。K线可用 {q.get('kline_coverage',0)}/{len(p['dates'])} 日。MSCI中国A50图表使用560050价格代理。</p></div></section>
 <section class="card" id="downloads"><h2>下载研究数据</h2><div class="downloads">'''+''.join(f'<a href="data/{name}">{label}<small>{desc}</small></a>' for name,label,desc in downloads)+'''</div></section>
 <section class="card"><h2>计算与判定方法</h2><details class="method"><summary>净申赎怎样计算？</summary><p>（当日总份额－上一交易日总份额）× 当日单位净值。缺少相邻交易日份额或当日净值时留空。数据来自上交所、深交所与天天基金。</p></details><details class="method"><summary>折算与历史修复怎样处理？</summary><p>确认公告按折算因子计算真实申赎；无公告的疑似折算留空待核验。官方记录可覆盖兜底或未知来源，旧日期修复不受12天窗口限制。</p></details><details class="method"><summary>统计异常怎样变为归因判断？</summary><p>至少3只已审查代理、20个此前训练样本，最多60个样本拟合共同因子。异常需结合拟合解释力、残差分位、剔除对照后的方向稳健性与持有人披露；没有干净对照时不能提高机构归因证据等级。</p></details><details class="method"><summary>更新与数据延迟</summary><p>页面重新加载不触发采集。GitHub Actions按配置时间采集并发布；公共接口可能晚发布或失败。请同时看数据日期、官方来源和覆盖数。</p></details></section>'''
     pages={
         'index.html':frame('index.html','市场概览','先看当日方向，再进入明细与证据。',p,overview,css),
+        'signals.html':frame('signals.html','状态与特征','先看状态，再核对强度、广度、结构、逆势、持续性、背景和对照。',p,signals_body(p),css),
         'flows.html':frame('flows.html','资金流明细','查看指数联动、类别汇总与逐日ETF记录。',p,flows,css,echarts,kline_js),
         'research.html':frame('research.html','归因研究','把统计偏离、对照审查和持有人证据分开判断。',p,research,css),
         'quality.html':frame('quality.html','数据与方法','查看历史核验、可用性、下载和计算边界。',p,quality,css),
@@ -107,4 +109,4 @@ def write_pages(p, cards, bars, legacy_css, echarts, kline_js, report):
     for name,html in pages.items():
         dest=root/name; tmp=dest.with_suffix('.html.tmp');tmp.write_text(html,encoding='utf-8',newline='\n');os.replace(tmp,dest)
     dest=Path(report); tmp=Path(str(dest)+'.tmp');tmp.write_text(pages['index.html'],encoding='utf-8',newline='\n');os.replace(tmp,dest)
-    print('四页报表已生成:',str(root),flush=True)
+    print('五页报表已生成:',str(root),flush=True)

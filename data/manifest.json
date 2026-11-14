@@ -33,6 +33,13 @@
     "holding_bounds.csv": {
       "rows": 290,
       "sha256": "b0779b03c97d7dc97b11e91dd7be73a67a968d7eb04584421d1cc2f8e89c67e8"
+    },
+    "features_daily.csv": {
+      "rows": 34344,
+      "sha256": "4faf60062d99f1cd0e27d2d645b5e09bb3d265a04486822edb9192a40d63d37d"
+    },
+    "features_latest.json": {
+      "sha256": "afee07de140677c4310d0afa5586f980197f4c469d1fcc9be36d5b96f0895475"
     }
   },
   "history_verification": {
@@ -55,7 +62,7 @@
     "failures": 0,
     "changed_records": 35894
   },
-  "snapshot_fingerprint": "2d8c8deeb62b5530938c9d6da1c1e9c645b58e0602302f63fddbd18a35dc0d30",
+  "snapshot_fingerprint": "afe798408433788a96354f6a2fad7f7cbc2d5a19836ccd8442d6f096762b9d3b",
   "input_sha256": {
     "config/universe.json": "0b585ffe024c7dda72b10270f9c687d2e3a0b173b5f296616e70dd7cca0cae5a",
     "config/events.json": "db5114221f17e827ff297da1b5bc9be7a0dd29730e02fe397ca8b8034513459f",
@@ -65,9 +72,10 @@
     "_nav_cache.json": "5affceee0bbec3af5633c662937792a145271c475490e456cebf8e655e648331",
     "_kline_cache.json": "65db26849350b1536ecc32403748222d0f19000dc64a1a115df67dee9b949ea8",
     "calculations.py": "3936e647519cc6906cb7ea535afeb95673b70efb4f6b40b1e8bffeaf071557ff",
-    "compute.py": "73c70260fab998eb54fcddf906be153ce32f8f3c2babca9cfd9615103b6db966",
+    "compute.py": "aae27cd86cfdbfb2ba8f3321b4d42e7f9e53f248ac1293ae4ab7a79420e1c8e6",
     "attribution.py": "48ee6043337440a366ac98ac81f01093ad28c086b7bd0c5b615ee8a6d46e504c",
     "provenance.py": "6af5a78e19e59e28e937e11c9c52a907b3a4440fa03a5ecefa5c0fa1dd8d7f2d",
-    "verify_history.py": "144ac2935af5243b5210dd4a0cbbf005574169e217c3f26e1d97a4e23b73f9dc"
+    "verify_history.py": "144ac2935af5243b5210dd4a0cbbf005574169e217c3f26e1d97a4e23b73f9dc",
+    "features.py": "e291705d09444b6edcea928309f52f1de30561b7a860a9a04462f939fecd7141"
   }
 }

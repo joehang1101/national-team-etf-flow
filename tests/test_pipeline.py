@@ -53,11 +53,11 @@ class PipelineTests(unittest.TestCase):
             self.assertIn('2026-11-13', html)
             self.assertNotIn('<script src=', html)
             from bs4 import BeautifulSoup
-            for name in ['index.html','flows.html','research.html','quality.html']:
+            for name in ['index.html','signals.html','flows.html','research.html','quality.html']:
                 page=root/name
                 self.assertTrue(page.exists(),name)
                 soup=BeautifulSoup(page.read_text(encoding='utf-8'),'html.parser')
-                self.assertEqual(len(soup.select('nav.nav a')),4)
+                self.assertEqual(len(soup.select('nav.nav a')),5)
                 self.assertEqual(len(soup.select('nav.nav a[aria-current="page"]')),1)
                 for link in soup.select('nav.nav a'):
                     self.assertTrue((root/link['href']).exists())

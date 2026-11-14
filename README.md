@@ -47,7 +47,8 @@ python -X utf8 refresh.py --offline
 
 ## 页面分层
 
-- `index.html`：市场概览，只看当日方向、关键指标与研究摘要。
+- `index.html`：市场概览，先看候选池状态摘要，再看全观察池金额和研究摘要。
+- `signals.html`：状态与七类特征、标准化示例、逐只候选z值、历史状态与可展开方法。
 - `flows.html`：指数走势、资产规模、ETF与类别明细，矩阵按需展开。
 - `research.html`：统计偏离、筛选、拟合与对照剔除敏感度、披露出处。
 - `quality.html`：历史核验、下载、数据可用性和方法边界。
@@ -66,7 +67,8 @@ python -X utf8 refresh.py --offline
 | 文件 | 用途 |
 |---|---|
 | `refresh.py` | 命令行入口与流程调度 |
-| `web_layout.py` / `assets/app.css` | 四页布局与统一视觉样式 |
+| `web_layout.py` / `feature_layout.py` / `assets/app.css` | 五页布局与统一视觉样式 |
+| `features.py` | 规模标准化、此前60日z、广度、结构、行情背景与描述性状态 |
 | `verify_history.py` | 全量历史来源核验与检查点 |
 | `fetch.py` / `compute.py` / `render.py` | 采集、汇总、网页渲染 |
 | `provenance.py` / `attribution.py` / `exports.py` | 来源修复、归因研究、CSV导出 |
@@ -88,7 +90,7 @@ python -X utf8 refresh.py --offline
 
 `.github/workflows/daily-refresh.yml` 每天在北京时间07:45、08:00、08:15、08:30、08:45、09:00、09:15、09:30、16:00、23:00触发，也可在 Actions 手动 Run workflow。GitHub定时任务可能延迟，不保证准点；节假日通常没有新交易数据。
 
-工作流安装统一依赖 → 运行测试 → 采集并计算 → 提交两个HTML与三类缓存 → 推送main → 上传仅含首页的发布产物 → 部署Pages。向main推送、定时任务和手动触发都会运行此流程。无内容变化则不提交；任务设串行并发组和25分钟超时。使用仓库自带 `GITHUB_TOKEN`，无需在源码或远程URL中填写个人Token。
+工作流安装统一依赖 → 运行测试 → 按需采集并计算 → 提交五个网页、中文首页副本、研究数据与缓存 → 上传五页和data目录 → 部署Pages。推送main或手动取消refresh_data时直接发布已生成文件；定时任务及默认手动运行先采集再发布。无内容变化则不提交；任务设串行并发组和25分钟超时。使用仓库自带 `GITHUB_TOKEN`，无需在源码或远程URL中填写个人Token。
 
 首次启用需：
 
@@ -100,13 +102,15 @@ python -X utf8 refresh.py --offline
 
 完整的首次发布、日常维护和故障排查操作见 [docs/GitHub网页发布操作.md](docs/GitHub网页发布操作.md)。
 
-预期 Pages 地址为 `https://joehang1101.github.io/national-team-etf-flow/`，启用并成功部署后才可用。本次本地验收不代表该地址已部署成功。
+Pages 地址为 `https://joehang1101.github.io/national-team-etf-flow/`。每次上线仍需核对Actions部署成功与网页数据日期。
 
 ## 数据口径
 
 日净申赎估算（亿元）＝（当日总份额－上一交易日总份额）× 当日单位净值 ÷ 100000000。
 
 `config/events.json`支持公告确认的份额折算；`data/`输出日度CSV和校验清单。归因模块输出证据等级，不输出身份概率。
+
+特征使用26只候选池，8只A500对照候选不计入该池；原金额图表仍为34只全观察池。日度资金率=净申赎÷前一交易日ETF总资产，非国家队持仓。z使用此前60个完整交易日的样本均值/标准差，累计窗口与其基准不共享日期，缺失、成员变化、零波动基准留空。状态为描述性规则，不提供仓位百分比或买卖价。完整定义见 [特征与状态](docs/特征与状态.md)。
 
 缺少相邻交易日份额或当日净值时显示“—”，不拿旧净值计算，也不把跨多日变化归给一天。疑似份额折算同样留空待核验。合计仅包含可计算样本，历史覆盖可能变化；未做固定样本可比性调整。资产规模＝各ETF总份额×净值的加总，缺日沿用可用前值，不是汇金持仓价值。
 

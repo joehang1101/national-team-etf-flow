@@ -12,6 +12,7 @@ from render import render_html
 from provenance import migrate_cache, repair_dates, lineage_summary
 from attribution import attribute, anchor_intervals, holding_bounds
 from exports import export_data
+from features import extract_features
 
 def main(offline=False, fresh_retries=0, repair_limit=8):
     print("拉取数据中 ...", flush=True)
@@ -76,6 +77,7 @@ def main(offline=False, fresh_retries=0, repair_limit=8):
     payload["lineage"] = lineage_summary(cache)
     anchors = read_json(os.path.join(OUT_DIR, 'config', 'anchors.json')).get('anchors', [])
     payload['attribution'] = attribute(payload['daily_records'], ENTRIES, anchors)
+    payload['features'] = extract_features(payload, ENTRIES)
     payload['anchor_intervals'] = anchor_intervals(anchors)
     payload['holding_bounds'] = holding_bounds(payload['daily_records'], anchors)
     payload['anchors'] = anchors
@@ -84,7 +86,7 @@ def main(offline=False, fresh_retries=0, repair_limit=8):
     payload['quality']['official_latest'] = sum(r['source_verified'] and r['f'] is not None for r in daily if r['d'] == payload['data_asof'])
     payload['fingerprint']=snapshot_fingerprint([SHARES_CACHE,NAV_CACHE,KLINE_CACHE]+[
         os.path.join(OUT_DIR,name) for name in ['config/universe.json','config/events.json','config/anchors.json',
-                                              'config/control_reviews.json','calculations.py','attribution.py','compute.py']])
+                                              'config/control_reviews.json','calculations.py','attribution.py','compute.py','features.py']])
     previous=last_published_state()
     payload['updated']=(previous.get('updated') if previous and previous.get('fingerprint')==payload['fingerprint'] else None) or now_bj().strftime('%Y-%m-%d %H:%M')
     return payload

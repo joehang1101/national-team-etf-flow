@@ -131,5 +131,6 @@ def build_payload(daily, shares, nav, valid, trade_days, exp, deep_start, cat_kl
     if not any(coverage.values()):
         raise RuntimeError("没有可计算的净申赎数据，保留上次报表")
     payload["daily_records"] = [it for it in daily if it["d"] <= cut]
+    payload['feature_trade_days'] = sorted(set(dates_sorted) | {d for d in trade_days or [] if dates_sorted[0] <= d <= cut})
     return payload
 

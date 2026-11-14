@@ -51,7 +51,7 @@ def export_data(payload, directory):
     manifest['input_sha256'] = {name: hashlib.sha256((repo/name).read_bytes()).hexdigest()
         for name in ['config/universe.json','config/events.json','config/anchors.json','config/control_reviews.json',
                      '_etf_shares_cache.json','_nav_cache.json','_kline_cache.json',
-                     'calculations.py','compute.py','attribution.py','provenance.py','verify_history.py'] if (repo/name).exists()}
+                     'calculations.py','compute.py','attribution.py','provenance.py','verify_history.py','features.py'] if (repo/name).exists()}
     manifest['files']['daily_etf.csv'] = write_csv(root/'daily_etf.csv',rows,fields)
     catrows, indexrows = [], []
     for i,date in enumerate(payload['dates']):
@@ -86,5 +86,13 @@ def export_data(payload, directory):
     manifest['files']['holding_bounds.csv']=write_csv(root/'holding_bounds.csv',bounds,
         ['date','code','anchor_date','anchor_holdings','holding_min','holding_max','change_min','change_max',
          'minimum_holding_reduction','available_at','assumption','not_etf_redemptions'])
+    features = payload.get('features', {})
+    feature_rows = features.get('records', [])
+    feature_fields = list(dict.fromkeys(k for row in feature_rows for k in row))
+    manifest['files']['features_daily.csv'] = write_csv(root/'features_daily.csv', feature_rows, feature_fields)
+    latest = {key: features.get(key) for key in ['version', 'latest', 'latest_etfs']}
+    content = (json.dumps(latest, ensure_ascii=False, indent=2, allow_nan=False) + '\n').encode('utf-8')
+    (root/'features_latest.json').write_bytes(content)
+    manifest['files']['features_latest.json'] = {'sha256': hashlib.sha256(content).hexdigest()}
     (root/'manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n',encoding='utf-8',newline='\n')
     return manifest

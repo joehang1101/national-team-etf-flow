@@ -64,7 +64,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add index.html flows.html research.html quality.html "国家队ETF每日净买入卖出报表.html" _etf_shares_cache.json _nav_cache.json data
+          git add index.html signals.html flows.html research.html quality.html "国家队ETF每日净买入卖出报表.html" _etf_shares_cache.json _nav_cache.json data
           [ -f _kline_cache.json ] && git add _kline_cache.json
           if git diff --cached --quiet; then
             echo "报表无变化, 跳过提交"
@@ -76,7 +76,7 @@ jobs:
       - name: 准备仅含网页的发布目录
         run: |
           mkdir -p _site
-          cp index.html flows.html research.html quality.html _site/
+          cp index.html signals.html flows.html research.html quality.html _site/
           cp -R data _site/data
           touch _site/.nojekyll
 
